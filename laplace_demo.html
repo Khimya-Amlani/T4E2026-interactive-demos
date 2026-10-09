@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Laplace Explorer — Combined Modules</title>
+<style>
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    max-width: 1000px;
+    margin: 24px auto;
+    padding: 0 20px;
+    background: #fafafa;
+    color: #1a1a1a;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 2px; }
+  p.subtitle { color: #666; margin-top: 0; margin-bottom: 18px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+  .tab-btn {
+    padding: 9px 16px; font-size: 14px; border: 1px solid #ccc; border-radius: 8px;
+    background: #f0f0f0; cursor: pointer;
+  }
+  .tab-btn.active { background: #378add; color: #fff; border-color: #378add; }
+  .ctrl-btn {
+    padding: 9px 16px; font-size: 14px; border: 1px solid #ccc; border-radius: 8px;
+    background: #f0f0f0; cursor: pointer;
+  }
+  .ctrl-btn.active { background: #378add; color: #fff; border-color: #378add; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 18px;
+  }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .row label { font-size: 13px; color: #444; min-width: 150px; }
+  input[type="range"] { flex: 1; min-width: 140px; }
+  select { padding: 6px 8px; font-size: 13px; border: 1px solid #999; border-radius: 6px; }
+  .badge { font-size: 13px; font-weight: 600; min-width: 40px; text-align: right; }
+  .eq-display, .tf-display {
+    font-size: 17px; text-align: center; padding: 12px 8px; background: #f0f4f8;
+    border-radius: 8px; margin-bottom: 6px; font-family: "Cambria Math", Georgia, serif;
+  }
+  .eq-combined { font-size: 17px; text-align: center; padding: 12px 8px; background: #eaf3de; border-radius: 8px; font-family: "Cambria Math", Georgia, serif; }
+  canvas { width: 100%; display: block; }
+  .interp-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 14px; }
+  .interp-item:last-child { border-bottom: none; }
+  .interp-q { color: #555; min-width: 190px; }
+  .interp-a { font-weight: 600; }
+  .status-stable { color: #1a7a4c; }
+  .status-marginal { color: #b5860a; }
+  .status-unstable { color: #b3261e; }
+  .app-note { font-size: 13px; color: #333; line-height: 1.6; background: #f7f7f2; border-radius: 8px; padding: 12px 14px; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<h1>Laplace Explorer — combined modules</h1>
+<p class="subtitle">First-order K/(s+a), linearity property, and second-order response, in one lab</p>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="t1">First-order: K/(s+a)</button>
+  <button class="tab-btn" data-tab="t2">Linear response</button>
+  <button class="tab-btn" data-tab="t3">Quadratic (2nd order) response</button>
+  <button class="tab-btn" data-tab="t4">Pole movement</button>
+  <button class="tab-btn" data-tab="t5">Sensor example</button>
+  <button class="tab-btn" data-tab="t6">f(t) &#8644; F(s) calculator</button>
+</div>
+
+<div id="t1" class="panel active">
+  <div class="card">
+    <div class="row">
+      <label for="K">Gain K</label>
+      <input type="range" id="K" min="0.5" max="10" step="0.1" value="4">
+      <span class="badge" id="K-out">4.0</span>
+    </div>
+    <div class="row">
+      <label for="apole">Pole location a</label>
+      <input type="range" id="apole" min="-3" max="15" step="0.1" value="2">
+      <span class="badge" id="apole-out">2.0</span>
+    </div>
+    <div class="tf-display" id="tf1"></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <p style="font-size:13px; color:#666; margin:0 0 6px;">Pole location (s-plane)</p>
+      <canvas id="poleplot1" height="240"></canvas>
+    </div>
+    <div class="card">
+      <p style="font-size:13px; color:#666; margin:0 0 6px;">Step response c(t)</p>
+      <canvas id="respplot1" height="240"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <p style="font-size:15px; font-weight:600; margin:0 0 8px;">Engineering interpretation panel</p>
+    <div class="interp-item"><span class="interp-q">Is the system stable?</span><span class="interp-a" id="t1-stable"></span></div>
+    <div class="interp-item"><span class="interp-q">What controls speed?</span><span class="interp-a" id="t1-speed"></span></div>
+    <div class="interp-item"><span class="interp-q">What controls amplitude?</span><span class="interp-a" id="t1-amp"></span></div>
+    <div class="interp-item"><span class="interp-q">If I increase K only?</span><span class="interp-a" id="t1-kchange"></span></div>
+    <div class="interp-item"><span class="interp-q">If I increase a only?</span><span class="interp-a" id="t1-achange"></span></div>
+    <div class="app-note" id="t1-extc"></div>
+  </div>
+</div>
+
+<div id="t2" class="panel">
+  <div class="card">
+    <div class="row">
+      <label for="fsel">Signal f(t)</label>
+      <select id="fsel">
+        <option value="step">Unit step: f(t)=1</option>
+        <option value="exp">Exponential: f(t)=e^-t</option>
+        <option value="sin">Sinusoid: f(t)=sin(3t)</option>
+      </select>
+      <label style="margin-left:12px;">Coefficient a</label>
+      <input type="range" id="lin_a" min="-3" max="3" step="0.1" value="2">
+      <span class="badge" id="lin_a-out">2.0</span>
+    </div>
+    <div class="row">
+      <label for="gsel">Signal g(t)</label>
+      <select id="gsel">
+        <option value="ramp">Unit ramp: g(t)=t</option>
+        <option value="step">Unit step: g(t)=1</option>
+        <option value="exp">Exponential: g(t)=e^-t</option>
+      </select>
+      <label style="margin-left:12px;">Coefficient b</label>
+      <input type="range" id="lin_b" min="-3" max="3" step="0.1" value="1">
+      <span class="badge" id="lin_b-out">1.0</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="eq-display" id="feq"></div>
+    <div class="eq-display" id="geq"></div>
+    <div class="eq-combined" id="combeq"></div>
+  </div>
+  <div class="card">
+    <p style="font-size:13px; color:#666; margin:0 0 6px;">h(t) = a&middot;f(t) + b&middot;g(t)</p>
+    <canvas id="respplot2" height="240"></canvas>
+  </div>
+  <div class="card">
+    <p style="font-size:15px; font-weight:600; margin:0 0 8px;">Engineering interpretation panel</p>
+    <div class="interp-item"><span class="interp-q">Why does this matter for circuits?</span><span class="interp-a">Superposition — total response of a linear circuit to combined sources equals the weighted sum of each source's individual response.</span></div>
+    <div class="interp-item"><span class="interp-q">What if a or b is negative?</span><span class="interp-a" id="t2-neg"></span></div>
+    <div class="app-note" id="t2-extc"></div>
+  </div>
+</div>
+
+<div id="t3" class="panel">
+  <div class="card">
+    <div class="row">
+      <label for="zeta">Damping ratio (&#950;)</label>
+      <input type="range" id="zeta" min="-0.3" max="2" step="0.02" value="0.5">
+      <span class="badge" id="zeta-out">0.50</span>
+    </div>
+    <div class="row">
+      <label for="wn">Natural frequency (&#969;n)</label>
+      <input type="range" id="wn" min="0.5" max="8" step="0.1" value="3">
+      <span class="badge" id="wn-out">3.0</span>
+    </div>
+    <div class="tf-display" id="tf3"></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <p style="font-size:13px; color:#666; margin:0 0 6px;">Pole-zero map (s-plane)</p>
+      <canvas id="poleplot3" height="240"></canvas>
+    </div>
+    <div class="card">
+      <p style="font-size:13px; color:#666; margin:0 0 6px;">Step response c(t)</p>
+      <canvas id="respplot3" height="240"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <p style="font-size:15px; font-weight:600; margin:0 0 8px;">Engineering interpretation panel</p>
+    <div class="interp-item"><span class="interp-q">Is the system stable?</span><span class="interp-a" id="t3-stable"></span></div>
+    <div class="interp-item"><span class="interp-q">Is it fast or slow?</span><span class="interp-a" id="t3-speed"></span></div>
+    <div class="interp-item"><span class="interp-q">Will it oscillate?</span><span class="interp-a" id="t3-osc"></span></div>
+    <div class="interp-item"><span class="interp-q">Will it overshoot?</span><span class="interp-a" id="t3-overshoot"></span></div>
+    <div class="interp-item"><span class="interp-q">How would an engineer improve it?</span><span class="interp-a" id="t3-improve"></span></div>
+    <div class="app-note" id="t3-extc"></div>
+  </div>
+</div>
+
+<div id="t4" class="panel">
+  <div class="card">
+    <div class="row">
+      <label for="poleAnim">Pole location a</label>
+      <input type="range" id="poleAnim" min="-4" max="15" step="0.1" value="1">
+      <span class="badge" id="poleAnim-out">1.0</span>
+      <button id="animBtn" class="ctrl-btn" style="margin-left:10px;">Animate sweep</button>
+    </div>
+    <div class="tf-display">F(s) = 1 / (s + a) &nbsp;&mdash;&nbsp; move or animate the pole and watch both plots respond together</div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <p style="font-size:13px; color:#666; margin:0 0 6px;">Pole on the complex plane</p>
+      <canvas id="poleplot4" height="240"></canvas>
+    </div>
+    <div class="card">
+      <p style="font-size:13px; color:#666; margin:0 0 6px;">Step response c(t)</p>
+      <canvas id="respplot4" height="240"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <p style="font-size:15px; font-weight:600; margin:0 0 6px;">What's happening right now</p>
+    <p style="font-size:14px; line-height:1.6;" id="t4-live"></p>
+    <div class="app-note">Pattern to notice: pole moving left &rarr; faster. Pole moving right toward zero &rarr; slower. Pole crossing into positive real values &rarr; unstable.</div>
+  </div>
+</div>
+
+<div id="t5" class="panel">
+  <div class="card">
+    <div class="row">
+      <label>Choose a sensor</label>
+      <button class="ctrl-btn sensor-btn" data-a="0.2" style="margin-left:0;">Slow thermal sensor</button>
+      <button class="ctrl-btn sensor-btn active" data-a="2">Standard sensor: 1/(s+2)</button>
+      <button class="ctrl-btn sensor-btn" data-a="8">Fast opto sensor</button>
+    </div>
+    <div class="tf-display" id="tf5"></div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <p style="font-size:13px; color:#666; margin:0 0 6px;">Pole location</p>
+      <canvas id="poleplot5" height="220"></canvas>
+    </div>
+    <div class="card">
+      <p style="font-size:13px; color:#666; margin:0 0 6px;">Sensor step response</p>
+      <canvas id="respplot5" height="220"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <p style="font-size:15px; font-weight:600; margin:0 0 8px;">Engineering interpretation panel</p>
+    <div class="interp-item"><span class="interp-q">Time constant &#964; = 1/a</span><span class="interp-a" id="t5-tau"></span></div>
+    <div class="interp-item"><span class="interp-q">Settling time (&asymp;4&#964;)</span><span class="interp-a" id="t5-settle"></span></div>
+    <div class="app-note" id="t5-extc"></div>
+  </div>
+</div>
+
+<div id="t6" class="panel">
+  <div class="tabs" style="margin-bottom:14px;">
+    <button class="ctrl-btn subtab-btn active" data-sub="s6a">Time function &rarr; F(s)</button>
+    <button class="ctrl-btn subtab-btn" data-sub="s6b">F(s) &rarr; Time function</button>
+  </div>
+
+  <div id="s6a" class="subpanel">
+    <div class="card">
+      <p style="font-size:13px; color:#666; margin:0 0 8px;">Enter f(t) using: constants, t, t^n, exp(a*t), sin(w*t), cos(w*t), exp(a*t)*sin(w*t), exp(a*t)*cos(w*t) &mdash; combined with + and -. Use explicit * for every multiplication.</p>
+      <div class="row">
+        <label for="ftInput">f(t) =</label>
+        <input type="text" id="ftInput" value="3*exp(-2*t)+5*sin(4*t)" style="flex:1; min-width:260px; padding:8px; font-size:14px; border:1px solid #999; border-radius:6px;">
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:13px; color:#666; margin:0 0 6px;">Recognised terms and their Laplace transform</p>
+      <div id="ftTerms" style="font-size:14px; line-height:1.8;"></div>
+      <div class="eq-combined" id="ftCombined" style="margin-top:10px;"></div>
+    </div>
+    <div class="card">
+      <p style="font-size:13px; color:#666; margin:0 0 6px;">Plot of f(t) (always shown, computed directly from your expression)</p>
+      <canvas id="ftPlot" height="220"></canvas>
+    </div>
+    <div class="card">
+      <p style="font-size:15px; font-weight:600; margin:0 0 6px;">Interpretation</p>
+      <p style="font-size:14px; line-height:1.6;" id="ftInterp"></p>
+    </div>
+  </div>
+
+  <div id="s6b" class="subpanel" style="display:none;">
+    <div class="card">
+      <p style="font-size:13px; color:#666; margin:0 0 10px;">Supports F(s) = (b1&middot;s + b0) / (s&sup2; + p&middot;s + q) &mdash; i.e. any numerator up to degree 1 over any denominator up to degree 2. This covers every system type in this lab (first-order is the special case b1=0, p=a, q=0).</p>
+      <div class="row"><label>Numerator: b1</label><input type="number" id="Fb1" value="0" step="0.1" style="width:90px;"><label style="min-width:auto; margin-left:10px;">b0</label><input type="number" id="Fb0" value="9" step="0.1" style="width:90px;"></div>
+      <div class="row"><label>Denominator: p</label><input type="number" id="Fp" value="3" step="0.1" style="width:90px;"><label style="min-width:auto; margin-left:10px;">q</label><input type="number" id="Fq" value="9" step="0.1" style="width:90px;"></div>
+      <div class="tf-display" id="FsDisplay"></div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <p style="font-size:13px; color:#666; margin:0 0 6px;">Poles (roots of denominator)</p>
+        <canvas id="FsPolePlot" height="220"></canvas>
+      </div>
+      <div class="card">
+        <p style="font-size:13px; color:#666; margin:0 0 6px;">f(t) = inverse Laplace of F(s)</p>
+        <canvas id="FsRespPlot" height="220"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <p style="font-size:15px; font-weight:600; margin:0 0 8px;">Result and interpretation</p>
+      <div class="eq-combined" id="FsResult" style="margin-bottom:10px;"></div>
+      <div class="interp-item"><span class="interp-q">Is it stable?</span><span class="interp-a" id="Fs-stable"></span></div>
+      <div class="interp-item"><span class="interp-q">Oscillatory?</span><span class="interp-a" id="Fs-osc"></span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+  });
+});
+
+function drawAxes(ctx, w, h, padL, padR, padT, padB){
+  ctx.strokeStyle = '#ccc'; ctx.lineWidth = 1;
+  ctx.strokeRect(padL, padT, w - padL - padR, h - padT - padB);
+}
+function setupCanvas(id, hpx){
+  const cv = document.getElementById(id);
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 440, h = hpx;
+  cv.width = w*dpr; cv.height = h*dpr;
+  const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+  ctx.clearRect(0,0,w,h);
+  return { ctx, w, h };
+}
+
+const Ksl = document.getElementById('K'), Kout = document.getElementById('K-out');
+const asl = document.getElementById('apole'), aout = document.getElementById('apole-out');
+
+function drawPolePoint(ctx, w, h, poles, rangeHint){
+  const range = Math.max(rangeHint, 5);
+  const cx = w/2, cy = h/2;
+  const scale = Math.min(w,h)/2/range * 0.85;
+  ctx.strokeStyle = '#ddd'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(10,cy); ctx.lineTo(w-10,cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,10); ctx.lineTo(cx,h-10); ctx.stroke();
+  ctx.fillStyle = '#888'; ctx.font = '11px Arial';
+  ctx.fillText('Re', w-24, cy-6); ctx.fillText('Im', cx+6, 18);
+  ctx.fillStyle = 'rgba(211,80,80,0.06)';
+  ctx.fillRect(cx, 10, w-10-cx, h-20);
+  ctx.strokeStyle = '#d84438'; ctx.lineWidth = 2.5;
+  poles.forEach(([re, im]) => {
+    const px = cx + re*scale, py = cy - im*scale;
+    ctx.beginPath();
+    ctx.moveTo(px-6,py-6); ctx.lineTo(px+6,py+6);
+    ctx.moveTo(px-6,py+6); ctx.lineTo(px+6,py-6);
+    ctx.stroke();
+  });
+}
+
+function renderT1(){
+  const K = parseFloat(Ksl.value), a = parseFloat(asl.value);
+  Kout.textContent = K.toFixed(1); aout.textContent = a.toFixed(1);
+  document.getElementById('tf1').innerHTML = 'F(s) &nbsp;=&nbsp; ' + K.toFixed(1) + ' / (s + ' + a.toFixed(1) + ')';
+
+  const { ctx: c1, w: w1, h: h1 } = setupCanvas('poleplot1', 240);
+  drawPolePoint(c1, w1, h1, [[-a, 0]], Math.max(Math.abs(a)*1.4, 5));
+
+  const { ctx, w, h } = setupCanvas('respplot1', 240);
+  const padL=40, padR=10, padT=14, padB=24;
+  drawAxes(ctx, w, h, padL, padR, padT, padB);
+
+  const tmax = a > 0.05 ? Math.min(15, 5/a) : 10;
+  const n = 300;
+  const vals = [];
+  let ymax = 1, ymin = -0.5;
+  for (let i=0;i<=n;i++){
+    const t = tmax*i/n;
+    let y;
+    if (a > 0.001) y = (K/a) * (1 - Math.exp(-a*t));
+    else if (Math.abs(a) <= 0.001) y = K*t;
+    else y = (K/a) * (1 - Math.exp(-a*t));
+    y = Math.max(-50, Math.min(50, y));
+    vals.push(y);
+    ymax = Math.max(ymax, y); ymin = Math.min(ymin, y);
+  }
+  ymax += Math.abs(ymax)*0.15 + 0.3; ymin -= Math.abs(ymin)*0.15 + 0.1;
+
+  const plotW = w-padL-padR, plotH = h-padT-padB;
+  function X(t){ return padL + (t/tmax)*plotW; }
+  function Y(y){ return padT + plotH - ((y-ymin)/(ymax-ymin))*plotH; }
+  ctx.strokeStyle = '#378add'; ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  for (let i=0;i<=n;i++){ const t = tmax*i/n; if(i===0) ctx.moveTo(X(t),Y(vals[i])); else ctx.lineTo(X(t),Y(vals[i])); }
+  ctx.stroke();
+  ctx.fillStyle = '#888'; ctx.font = '11px Arial';
+  ctx.fillText('t (s)', w-padR-24, h-6); ctx.fillText('c(t)', 4, 16);
+
+  const stableEl = document.getElementById('t1-stable');
+  if (a > 0.01) { stableEl.textContent = 'Yes — pole at s = -' + a.toFixed(1) + ', left half-plane.'; stableEl.className='interp-a status-stable'; }
+  else if (Math.abs(a) <= 0.01) { stableEl.textContent = 'Marginally stable — pole at the origin, output ramps forever (pure integrator).'; stableEl.className='interp-a status-marginal'; }
+  else { stableEl.textContent = 'No — pole at s = +' + Math.abs(a).toFixed(1) + ', right half-plane, output grows unbounded.'; stableEl.className='interp-a status-unstable'; }
+
+  document.getElementById('t1-speed').textContent = 'Only a (the pole location) — time constant \u03c4 = 1/a = ' + (a>0.01 ? (1/a).toFixed(2)+' s' : 'undefined here') + '. Larger a means faster response.';
+  document.getElementById('t1-amp').textContent = 'Only K (the gain) — final steady-state value = K/a' + (a>0.01 ? ' = ' + (K/a).toFixed(2) : '') + '. K does not affect speed at all.';
+  document.getElementById('t1-kchange').textContent = 'The curve gets taller (bigger final value), but reaches steady state in exactly the same time — speed is unchanged.';
+  document.getElementById('t1-achange').textContent = 'The curve settles faster (smaller time constant) and the pole moves further left, but the final amplitude K/a also changes since a is in the denominator.';
+  document.getElementById('t1-extc').textContent = 'EXTC relevance: this is the exact model for an RC low-pass filter (a = 1/RC) or a temperature/light sensor\'s response — engineers pick a large a (small RC) for fast sensors, and set K separately (via amplifier gain) to get the desired output range, without those two choices interfering with each other.';
+}
+
+const fsel = document.getElementById('fsel'), gsel = document.getElementById('gsel');
+const lin_a = document.getElementById('lin_a'), lin_a_out = document.getElementById('lin_a-out');
+const lin_b = document.getElementById('lin_b'), lin_b_out = document.getElementById('lin_b-out');
+const sigDefs = {
+  step: { time: '1', lap: '1/s', f: t => t>=0 ? 1 : 0 },
+  ramp: { time: 't', lap: '1/s\u00b2', f: t => t>=0 ? t : 0 },
+  exp:  { time: 'e^{-t}', lap: '1/(s+1)', f: t => t>=0 ? Math.exp(-t) : 0 },
+  sin:  { time: 'sin(3t)', lap: '3/(s\u00b2+9)', f: t => t>=0 ? Math.sin(3*t) : 0 },
+};
+function renderT2(){
+  const a = parseFloat(lin_a.value), b = parseFloat(lin_b.value);
+  lin_a_out.textContent = a.toFixed(1); lin_b_out.textContent = b.toFixed(1);
+  const fd = sigDefs[fsel.value], gd = sigDefs[gsel.value];
+  document.getElementById('feq').innerHTML = 'f(t) = ' + fd.time + ' &nbsp;\u2194&nbsp; F(s) = ' + fd.lap;
+  document.getElementById('geq').innerHTML = 'g(t) = ' + gd.time + ' &nbsp;\u2194&nbsp; G(s) = ' + gd.lap;
+  document.getElementById('combeq').innerHTML = 'h(t) = ' + a.toFixed(1) + '\u00b7f(t) + ' + b.toFixed(1) + '\u00b7g(t) &nbsp;\u2194&nbsp; H(s) = ' + a.toFixed(1) + '[' + fd.lap + '] + ' + b.toFixed(1) + '[' + gd.lap + ']';
+
+  const { ctx, w, h } = setupCanvas('respplot2', 240);
+  const padL=40, padR=10, padT=14, padB=24;
+  drawAxes(ctx, w, h, padL, padR, padT, padB);
+  const tmax = 5, n = 300;
+  const fs=[], gs=[], hs=[];
+  let ymax=1, ymin=-1;
+  for (let i=0;i<=n;i++){
+    const t = tmax*i/n;
+    const fv=fd.f(t), gv=gd.f(t), hv=a*fv+b*gv;
+    fs.push(fv); gs.push(gv); hs.push(hv);
+    ymax = Math.max(ymax, fv, gv, hv); ymin = Math.min(ymin, fv, gv, hv);
+  }
+  ymax += 0.3; ymin -= 0.3;
+  const plotW = w-padL-padR, plotH = h-padT-padB;
+  function X(t){ return padL + (t/tmax)*plotW; }
+  function Y(y){ return padT + plotH - ((y-ymin)/(ymax-ymin))*plotH; }
+  function plotLine(vals, color, width, dash){
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash||[]);
+    ctx.beginPath();
+    for (let i=0;i<=n;i++){ const t=tmax*i/n; if(i===0) ctx.moveTo(X(t),Y(vals[i])); else ctx.lineTo(X(t),Y(vals[i])); }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  plotLine(fs, '#9fa8b5', 1.5, [4,3]);
+  plotLine(gs, '#c9a86a', 1.5, [4,3]);
+  plotLine(hs, '#378add', 2.5, []);
+  ctx.fillStyle = '#888'; ctx.font='11px Arial';
+  ctx.fillText('t (s)', w-padR-24, h-6);
+
+  document.getElementById('t2-neg').textContent = (a<0||b<0) ? 'A negative coefficient inverts that component (e.g. an inverting amplifier stage) — h(t) can dip below zero.' : 'Both coefficients are positive, so h(t) is a simple weighted addition.';
+  document.getElementById('t2-extc').textContent = 'EXTC relevance: a receiver combining a wanted signal with noise, an audio mixer, or a DC bias added to an AC input — each is h(t)=a\u00b7f(t)+b\u00b7g(t), analysable term-by-term in the s-domain.';
+}
+
+const zetaSlider = document.getElementById('zeta'), zetaOut = document.getElementById('zeta-out');
+const wnSlider = document.getElementById('wn'), wnOut = document.getElementById('wn-out');
+function stepResponse2(t, zeta, wn){
+  if (zeta > -1 && zeta < 1) {
+    const wd = wn * Math.sqrt(1 - zeta*zeta);
+    const phi = Math.acos(Math.max(-1, Math.min(1, zeta)));
+    if (Math.abs(1-zeta*zeta) < 1e-9) return 1;
+    return 1 - (Math.exp(-zeta*wn*t)/Math.sqrt(1-zeta*zeta)) * Math.sin(wd*t+phi);
+  } else if (Math.abs(zeta-1) < 1e-9) {
+    return 1 - Math.exp(-wn*t)*(1+wn*t);
+  } else {
+    const om = wn*Math.sqrt(zeta*zeta-1);
+    return 1 - Math.exp(-zeta*wn*t)*(Math.cosh(om*t) + (zeta*wn/om)*Math.sinh(om*t));
+  }
+}
+function renderT3(){
+  const zeta = parseFloat(zetaSlider.value), wn = parseFloat(wnSlider.value);
+  zetaOut.textContent = zeta.toFixed(2); wnOut.textContent = wn.toFixed(1);
+  const wn2 = (wn*wn).toFixed(2), twoZwn = (2*zeta*wn).toFixed(2);
+  document.getElementById('tf3').innerHTML = 'H(s) &nbsp;=&nbsp; ' + wn2 + ' / (s\u00b2 + ' + twoZwn + 's + ' + wn2 + ')';
+
+  const sigma = -zeta*wn;
+  let poles = [];
+  if (zeta > -1 && zeta < 1) { const wd = wn*Math.sqrt(1-zeta*zeta); poles = [[sigma, wd],[sigma,-wd]]; }
+  else if (Math.abs(zeta-1) < 1e-9) { poles = [[-wn,0]]; }
+  else { const om = wn*Math.sqrt(zeta*zeta-1); poles = [[-zeta*wn+om,0],[-zeta*wn-om,0]]; }
+
+  const { ctx: c3, w: w3, h: h3 } = setupCanvas('poleplot3', 240);
+  drawPolePoint(c3, w3, h3, poles.map(p=>[p[0],p[1]]).flat().length ? [poles[0], poles[1]||poles[0]] : poles, wn*1.4);
+
+  const { ctx, w, h } = setupCanvas('respplot3', 240);
+  const padL=36, padR=10, padT=14, padB=24;
+  drawAxes(ctx, w, h, padL, padR, padT, padB);
+  let tmax = zeta > 0.02 ? Math.min(20, 6/(zeta*wn)) : 12;
+  if (zeta <= 0.02) tmax = Math.min(20, 20/wn);
+  const n=300; const vals=[]; let ymax=1.2, ymin=-0.2;
+  for (let i=0;i<=n;i++){ const t=tmax*i/n; const y=stepResponse2(t,zeta,wn); vals.push(y); if(isFinite(y)){ymax=Math.max(ymax,y); ymin=Math.min(ymin,y);} }
+  ymax = Math.min(ymax,8); ymin = Math.max(ymin,-6);
+  const plotW=w-padL-padR, plotH=h-padT-padB;
+  function X(t){ return padL+(t/tmax)*plotW; }
+  function Y(y){ return padT+plotH-((y-ymin)/(ymax-ymin))*plotH; }
+  ctx.strokeStyle='#bbb'; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(padL,Y(1)); ctx.lineTo(w-padR,Y(1)); ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle='#378add'; ctx.lineWidth=2.2;
+  ctx.beginPath();
+  for (let i=0;i<=n;i++){ const t=tmax*i/n; const y=Math.max(ymin,Math.min(ymax,vals[i])); if(i===0) ctx.moveTo(X(t),Y(y)); else ctx.lineTo(X(t),Y(y)); }
+  ctx.stroke();
+  ctx.fillStyle='#888'; ctx.font='11px Arial';
+  ctx.fillText('t (s)', w-padR-24, h-6); ctx.fillText('c(t)', 4, 16);
+
+  const stableEl = document.getElementById('t3-stable');
+  if (sigma < -0.01) { stableEl.textContent='Yes — poles in left half-plane.'; stableEl.className='interp-a status-stable'; }
+  else if (Math.abs(sigma)<=0.01) { stableEl.textContent='Marginally stable — sustained oscillation.'; stableEl.className='interp-a status-marginal'; }
+  else { stableEl.textContent='No — poles in right half-plane, grows unbounded.'; stableEl.className='interp-a status-unstable'; }
+
+  const ts = zeta > 0.02 ? (4/(zeta*wn)) : NaN;
+  document.getElementById('t3-speed').textContent = (!isFinite(ts)||zeta<=0.02) ? 'Never settles.' : (ts<1?'Fast — settles in ~'+ts.toFixed(2)+' s.': ts<4?'Moderate — settles in ~'+ts.toFixed(2)+' s.':'Slow — settles in ~'+ts.toFixed(2)+' s.');
+  document.getElementById('t3-osc').textContent = zeta<1 ? 'Yes — underdamped, response rings.' : 'No — smooth approach to final value.';
+  let ov;
+  if (zeta<=0) ov='Unbounded / sustained.';
+  else if (zeta<1) ov=(Math.exp(-zeta*Math.PI/Math.sqrt(1-zeta*zeta))*100).toFixed(1)+'% peak overshoot.';
+  else ov='None.';
+  document.getElementById('t3-overshoot').textContent = ov;
+  document.getElementById('t3-improve').textContent = sigma>=-0.01 ? 'Increase damping immediately — not settling.' : zeta<0.5 ? 'Increase damping ratio to reduce ringing.' : zeta>1.3 ? 'Reduce damping or raise \u03c9n to speed up.' : 'Already a good speed/overshoot trade-off.';
+  document.getElementById('t3-extc').textContent = 'EXTC relevance: \u03b6\u22480.7 is the classic sweet spot used in PLL loop filters and op-amp feedback design — fast settling with acceptable overshoot.';
+}
+
+function drawSimpleResponse(canvasId, a, tmaxOverride){
+  const { ctx, w, h } = setupCanvas(canvasId, canvasId==='respplot5' ? 220 : 240);
+  const padL=40, padR=10, padT=14, padB=24;
+  drawAxes(ctx, w, h, padL, padR, padT, padB);
+  const tmax = tmaxOverride || (a > 0.05 ? Math.min(15, 5/a) : 10);
+  const n = 300; const vals = [];
+  let ymax = 1, ymin = -0.5;
+  for (let i=0;i<=n;i++){
+    const t = tmax*i/n;
+    let y;
+    if (Math.abs(a) > 0.001) y = (1/a) * (1 - Math.exp(-a*t));
+    else y = t;
+    y = Math.max(-50, Math.min(50, y));
+    vals.push(y);
+    ymax = Math.max(ymax, y); ymin = Math.min(ymin, y);
+  }
+  ymax += Math.abs(ymax)*0.15 + 0.3; ymin -= Math.abs(ymin)*0.15 + 0.1;
+  const plotW = w-padL-padR, plotH = h-padT-padB;
+  function X(t){ return padL + (t/tmax)*plotW; }
+  function Y(y){ return padT + plotH - ((y-ymin)/(ymax-ymin))*plotH; }
+  ctx.strokeStyle = '#378add'; ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  for (let i=0;i<=n;i++){ const t = tmax*i/n; if(i===0) ctx.moveTo(X(t),Y(vals[i])); else ctx.lineTo(X(t),Y(vals[i])); }
+  ctx.stroke();
+  ctx.fillStyle = '#888'; ctx.font = '11px Arial';
+  ctx.fillText('t (s)', w-padR-24, h-6); ctx.fillText('c(t)', 4, 16);
+  return tmax;
+}
+
+const poleAnimSlider = document.getElementById('poleAnim'), poleAnimOut = document.getElementById('poleAnim-out');
+const animBtn = document.getElementById('animBtn');
+let animating = false, animFrame = null;
+
+function renderT4(){
+  const a = parseFloat(poleAnimSlider.value);
+  poleAnimOut.textContent = a.toFixed(1);
+  const { ctx: c4, w: w4, h: h4 } = setupCanvas('poleplot4', 240);
+  drawPolePoint(c4, w4, h4, [[-a, 0]], Math.max(Math.abs(a)*1.4, 6));
+  drawSimpleResponse('respplot4', a);
+
+  let live;
+  if (a > 8) live = 'Pole far left at s = -' + a.toFixed(1) + ' — very fast response, settles almost immediately.';
+  else if (a > 0.5) live = 'Pole at s = -' + a.toFixed(1) + ' — stable, moderate speed.';
+  else if (a > 0.01) live = 'Pole close to the origin at s = -' + a.toFixed(1) + ' — stable but slow, long settling time.';
+  else if (a > -0.01) live = 'Pole essentially at the origin — marginal case, output ramps instead of settling.';
+  else live = 'Pole at s = +' + Math.abs(a).toFixed(1) + ', right half-plane — unstable, output grows without bound.';
+  document.getElementById('t4-live').textContent = live;
+}
+
+animBtn.addEventListener('click', () => {
+  if (animating) { animating = false; cancelAnimationFrame(animFrame); animBtn.textContent = 'Animate sweep'; return; }
+  animating = true; animBtn.textContent = 'Stop';
+  const start = -4, end = 15, duration = 6000;
+  const t0 = performance.now();
+  function step(now){
+    if (!animating) return;
+    let frac = (now - t0) / duration;
+    if (frac >= 1) { frac = 1; animating = false; animBtn.textContent = 'Animate sweep'; }
+    const a = start + (end - start) * frac;
+    poleAnimSlider.value = a;
+    renderT4();
+    if (frac < 1) animFrame = requestAnimationFrame(step);
+  }
+  animFrame = requestAnimationFrame(step);
+});
+poleAnimSlider.addEventListener('input', () => { animating = false; animBtn.textContent = 'Animate sweep'; renderT4(); });
+
+let currentSensorA = 2;
+function renderT5(){
+  document.getElementById('tf5').innerHTML = 'F(s) &nbsp;=&nbsp; 1 / (s + ' + currentSensorA.toFixed(1) + ')';
+  const { ctx: c5, w: w5, h: h5 } = setupCanvas('poleplot5', 220);
+  drawPolePoint(c5, w5, h5, [[-currentSensorA, 0]], Math.max(currentSensorA*1.4, 4));
+  drawSimpleResponse('respplot5', currentSensorA);
+
+  const tau = 1/currentSensorA;
+  document.getElementById('t5-tau').textContent = tau.toFixed(2) + ' s';
+  document.getElementById('t5-settle').textContent = (4*tau).toFixed(2) + ' s';
+
+  let note;
+  if (currentSensorA <= 0.3) note = 'This is a slow thermal-type sensor (e.g. a bulky temperature probe) — large thermal mass means a large RC-equivalent, so it reacts sluggishly to changes. Fine for slow-varying quantities like room temperature, unsuitable for fast transients.';
+  else if (currentSensorA <= 3) note = 'A standard sensor response, similar to a typical RC-coupled temperature or light sensor — balances reasonable speed with simple, low-noise circuitry. This is a common default in EXTC instrumentation design.';
+  else note = 'A fast opto/photodiode-type sensor — small time constant means it can track rapidly changing signals, at the cost of typically needing more bandwidth (and often more noise) in the following amplifier stage.';
+  document.getElementById('t5-extc').textContent = 'EXTC relevance: ' + note;
+}
+document.querySelectorAll('.sensor-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sensor-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentSensorA = parseFloat(btn.dataset.a);
+    renderT5();
+  });
+});
+
+document.querySelectorAll('.subtab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.subpanel').forEach(p => p.style.display = 'none');
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.sub).style.display = 'block';
+  });
+});
+
+// ---------- f(t) -> F(s) ----------
+function coef(str) {
+  if (str === '' || str === undefined) return 1;
+  if (str === '-') return -1;
+  if (str === '+') return 1;
+  return parseFloat(str);
+}
+function sMinus(a){ return a>=0 ? ('s-'+a) : ('s+'+Math.abs(a)); }
+const CN = '([+-]?\\d*\\.?\\d*)\\*?';
+const TCOEF = '([+-]?\\d*\\.?\\d*)\\*?t';
+
+function parseTerm(term) {
+  term = term.trim();
+  let m;
+  m = term.match(new RegExp('^'+CN+'exp\\('+TCOEF+'\\)\\*(sin|cos)\\('+TCOEF+'\\)$'));
+  if (m) {
+    const c = coef(m[1]), a = coef(m[2]), fn = m[3], w = coef(m[4]);
+    if (fn==='sin') return { type:'exp_sin', c, a, w, lap: c+'\u00b7'+w+'/(('+sMinus(a)+')\u00b2+'+w+'\u00b2)' };
+    else return { type:'exp_cos', c, a, w, lap: c+'\u00b7('+sMinus(a)+')/(('+sMinus(a)+')\u00b2+'+w+'\u00b2)' };
+  }
+  m = term.match(new RegExp('^'+CN+'exp\\('+TCOEF+'\\)$'));
+  if (m) { const c = coef(m[1]), a = coef(m[2]);
+    return { type:'exp', c, a, lap: c+'/('+sMinus(a)+')' }; }
+  m = term.match(new RegExp('^'+CN+'(sin|cos)\\('+TCOEF+'\\)$'));
+  if (m) { const c=coef(m[1]); const fn=m[2]; const w=coef(m[3]);
+    if(fn==='sin') return {type:'sin', c, w, lap:c+'\u00b7'+w+'/(s\u00b2+'+w+'\u00b2)'};
+    else return {type:'cos', c, w, lap:c+'\u00b7s/(s\u00b2+'+w+'\u00b2)'}; }
+  m = term.match(new RegExp('^'+CN+'t\\^(\\d+)$'));
+  if (m) { const c=coef(m[1]); const n=parseInt(m[2]);
+    let fact=1; for(let i=2;i<=n;i++) fact*=i;
+    return {type:'tn', c, n, lap:c+'\u00b7'+fact+'/s^'+(n+1)}; }
+  m = term.match(new RegExp('^'+CN+'t$'));
+  if (m && term.indexOf('t')>=0) { const c=coef(m[1]);
+    return {type:'t', c, lap:c+'/s\u00b2'}; }
+  m = term.match(/^([+-]?[\d.]+)$/);
+  if (m) { const c=parseFloat(m[1]); return {type:'const', c, lap:c+'/s'}; }
+  return { type:'unknown', raw: term };
+}
+function splitTerms(expr) {
+  expr = expr.replace(/\s+/g,'');
+  const terms = [];
+  let cur = '', depth = 0;
+  for (let i=0;i<expr.length;i++){
+    const ch = expr[i];
+    if (ch==='(') depth++;
+    if (ch===')') depth--;
+    if ((ch==='+'||ch==='-') && depth===0 && i>0) { terms.push(cur); cur = ch; }
+    else cur += ch;
+  }
+  terms.push(cur);
+  return terms.filter(t=>t.length && t!=='+');
+}
+function jsEval(expr){
+  let js = expr.replace(/\^/g,'**').replace(/exp/g,'Math.exp').replace(/sin/g,'Math.sin').replace(/cos/g,'Math.cos');
+  try { return new Function('t', 'return ' + js + ';'); } catch(e){ return null; }
+}
+
+const ftInput = document.getElementById('ftInput');
+function renderFt(){
+  const expr = ftInput.value;
+  const terms = splitTerms(expr);
+  const parsed = terms.map(parseTerm);
+  const termsDiv = document.getElementById('ftTerms');
+  termsDiv.innerHTML = parsed.map((p,i) => {
+    if (p.type==='unknown') return '<div>Term "'+p.raw+'" &mdash; not recognised (still plotted numerically below, but not included in F(s)).</div>';
+    return '<div>'+terms[i]+' &nbsp;\u2194&nbsp; '+p.lap+'</div>';
+  }).join('');
+  const known = parsed.filter(p=>p.type!=='unknown');
+  document.getElementById('ftCombined').innerHTML = known.length
+    ? 'F(s) = ' + known.map(p=>p.lap).join(' + ').replace(/\+ -/g,'\u2212 ')
+    : 'No recognised standard terms \u2014 see plot below for the numeric shape of f(t).';
+
+  const evalFn = jsEval(expr);
+  const { ctx, w, h } = setupCanvas('ftPlot', 220);
+  const padL=40, padR=10, padT=14, padB=24;
+  drawAxes(ctx, w, h, padL, padR, padT, padB);
+  if (evalFn) {
+    const tmax = 5, n = 300; const vals = [];
+    let ymax=1, ymin=-1;
+    for (let i=0;i<=n;i++){
+      const t = tmax*i/n;
+      let y = 0;
+      try { y = evalFn(t); if (!isFinite(y)) y = 0; } catch(e){ y = 0; }
+      vals.push(y); ymax = Math.max(ymax,y); ymin = Math.min(ymin,y);
+    }
+    ymax += Math.abs(ymax)*0.15+0.3; ymin -= Math.abs(ymin)*0.15+0.1;
+    const plotW=w-padL-padR, plotH=h-padT-padB;
+    function X(t){ return padL+(t/tmax)*plotW; }
+    function Y(y){ return padT+plotH-((y-ymin)/(ymax-ymin))*plotH; }
+    ctx.strokeStyle='#378add'; ctx.lineWidth=2.2;
+    ctx.beginPath();
+    for (let i=0;i<=n;i++){ const t=tmax*i/n; if(i===0) ctx.moveTo(X(t),Y(vals[i])); else ctx.lineTo(X(t),Y(vals[i])); }
+    ctx.stroke();
+    ctx.fillStyle='#888'; ctx.font='11px Arial';
+    ctx.fillText('t (s)', w-padR-24, h-6);
+
+    const hasExp = known.some(p=>p.type==='exp'||p.type==='exp_sin'||p.type==='exp_cos');
+    const hasGrowing = known.some(p=>(p.type==='exp'&&p.a>0)||(p.type==='exp_sin'&&p.a>0)||(p.type==='exp_cos'&&p.a>0));
+    const hasOsc = known.some(p=>p.type==='sin'||p.type==='cos'||p.type==='exp_sin'||p.type==='exp_cos');
+    let interp;
+    if (hasGrowing) interp = 'Contains a growing exponential term (positive rate) \u2014 this f(t) itself is unbounded; its Laplace transform still exists for large enough Re(s), but this shape would correspond to an unstable pole if seen as an impulse response.';
+    else if (hasOsc && hasExp) interp = 'Combination of decay and oscillation \u2014 typical of a damped sinusoidal response, e.g. a lightly-damped RLC circuit or ringing filter.';
+    else if (hasOsc) interp = 'Pure oscillation, no decay \u2014 corresponds to a pole pair exactly on the imaginary axis (marginally stable), like an ideal undamped oscillator.';
+    else if (hasExp) interp = 'Pure exponential decay/growth \u2014 typical first-order behaviour, e.g. RC charging/discharging.';
+    else interp = 'Polynomial or constant terms \u2014 typical of ramp/step-type standard inputs rather than a decaying system response.';
+    document.getElementById('ftInterp').textContent = interp;
+  }
+}
+ftInput.addEventListener('input', renderFt);
+
+// ---------- F(s) -> f(t) ----------
+const Fb1 = document.getElementById('Fb1'), Fb0 = document.getElementById('Fb0');
+const Fp = document.getElementById('Fp'), Fq = document.getElementById('Fq');
+
+function inverseLaplaceQuadratic(b1, b0, p, q) {
+  const disc = p*p - 4*q;
+  if (disc > 1e-9) {
+    const r1 = (-p + Math.sqrt(disc))/2, r2 = (-p - Math.sqrt(disc))/2;
+    const A = (b1*r1 + b0)/(r1 - r2), B = (b1*r2 + b0)/(r2 - r1);
+    return { type:'real-distinct', roots:[[r1,0],[r2,0]], f: t => A*Math.exp(r1*t) + B*Math.exp(r2*t),
+      desc: A.toFixed(3)+'e^{'+r1.toFixed(3)+'t} + '+B.toFixed(3)+'e^{'+r2.toFixed(3)+'t}' };
+  } else if (Math.abs(disc) <= 1e-9) {
+    const r = -p/2, A = b1, B = b0 + b1*r;
+    return { type:'repeated', roots:[[r,0]], f: t => A*Math.exp(r*t) + B*t*Math.exp(r*t),
+      desc: A.toFixed(3)+'e^{'+r.toFixed(3)+'t} + '+B.toFixed(3)+'t\u00b7e^{'+r.toFixed(3)+'t}' };
+  } else {
+    const sigma = -p/2, omega = Math.sqrt(4*q - p*p)/2;
+    const C = b1, D = (b0 + b1*sigma)/omega;
+    return { type:'complex', roots:[[sigma,omega],[sigma,-omega]], f: t => Math.exp(sigma*t)*(C*Math.cos(omega*t) + D*Math.sin(omega*t)),
+      desc: 'e^{'+sigma.toFixed(3)+'t}['+C.toFixed(3)+'cos('+omega.toFixed(3)+'t) + '+D.toFixed(3)+'sin('+omega.toFixed(3)+'t)]' };
+  }
+}
+
+function renderFs(){
+  const b1 = parseFloat(Fb1.value)||0, b0 = parseFloat(Fb0.value)||0;
+  const p = parseFloat(Fp.value)||0, q = parseFloat(Fq.value)||0;
+  document.getElementById('FsDisplay').innerHTML =
+    'F(s) = (' + b1.toFixed(1) + 's + ' + b0.toFixed(1) + ') / (s\u00b2 + ' + p.toFixed(1) + 's + ' + q.toFixed(1) + ')';
+
+  const result = inverseLaplaceQuadratic(b1, b0, p, q);
+  document.getElementById('FsResult').innerHTML = 'f(t) = ' + result.desc;
+
+  const { ctx: cP, w: wP, h: hP } = setupCanvas('FsPolePlot', 220);
+  const maxR = Math.max(...result.roots.map(r=>Math.abs(r[0])), Math.max(...result.roots.map(r=>Math.abs(r[1]))), 3);
+  drawPolePoint(cP, wP, hP, result.roots, maxR*1.4);
+
+  const { ctx, w, h } = setupCanvas('FsRespPlot', 220);
+  const padL=40, padR=10, padT=14, padB=24;
+  drawAxes(ctx, w, h, padL, padR, padT, padB);
+  const maxRe = Math.max(...result.roots.map(r=>Math.abs(r[0])), 0.5);
+  const tmax = Math.min(20, 6/maxRe);
+  const n=300; const vals=[]; let ymax=1, ymin=-1;
+  for (let i=0;i<=n;i++){ const t=tmax*i/n; let y=result.f(t); y=Math.max(-1e6,Math.min(1e6,y)); vals.push(y); ymax=Math.max(ymax,y); ymin=Math.min(ymin,y); }
+  ymax += Math.abs(ymax)*0.15+0.2; ymin -= Math.abs(ymin)*0.15+0.1;
+  const plotW=w-padL-padR, plotH=h-padT-padB;
+  function X(t){ return padL+(t/tmax)*plotW; }
+  function Y(y){ return padT+plotH-((y-ymin)/(ymax-ymin))*plotH; }
+  ctx.strokeStyle='#378add'; ctx.lineWidth=2.2;
+  ctx.beginPath();
+  for (let i=0;i<=n;i++){ const t=tmax*i/n; if(i===0) ctx.moveTo(X(t),Y(vals[i])); else ctx.lineTo(X(t),Y(vals[i])); }
+  ctx.stroke();
+  ctx.fillStyle='#888'; ctx.font='11px Arial'; ctx.fillText('t (s)', w-padR-24, h-6);
+
+  const maxRealPart = Math.max(...result.roots.map(r=>r[0]));
+  const stableEl = document.getElementById('Fs-stable');
+  if (maxRealPart < -0.01) { stableEl.textContent='Yes \u2014 all poles have negative real parts.'; stableEl.className='interp-a status-stable'; }
+  else if (Math.abs(maxRealPart) <= 0.01) { stableEl.textContent='Marginal \u2014 a pole lies on the imaginary axis.'; stableEl.className='interp-a status-marginal'; }
+  else { stableEl.textContent='No \u2014 a pole has a positive real part.'; stableEl.className='interp-a status-unstable'; }
+  document.getElementById('Fs-osc').textContent = result.type==='complex' ? 'Yes \u2014 complex conjugate poles produce a sinusoidal component.' : 'No \u2014 real poles only, purely exponential terms.';
+}
+Fb1.addEventListener('input', renderFs); Fb0.addEventListener('input', renderFs);
+Fp.addEventListener('input', renderFs); Fq.addEventListener('input', renderFs);
+
+Ksl.addEventListener('input', renderT1); asl.addEventListener('input', renderT1);
+fsel.addEventListener('change', renderT2); gsel.addEventListener('change', renderT2);
+lin_a.addEventListener('input', renderT2); lin_b.addEventListener('input', renderT2);
+zetaSlider.addEventListener('input', renderT3); wnSlider.addEventListener('input', renderT3);
+window.addEventListener('resize', () => { renderT1(); renderT2(); renderT3(); renderT4(); renderT5(); renderFt(); renderFs(); });
+
+renderT1(); renderT2(); renderT3(); renderT4(); renderT5(); renderFt(); renderFs();
+</script>
+
+</body>
+</html>

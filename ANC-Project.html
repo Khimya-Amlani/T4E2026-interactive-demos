@@ -1,0 +1,2126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ANC — Active Noise Cancellation</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #030508;
+    --surface: #0a0d14;
+    --border: rgba(255,255,255,0.07);
+    --noise: #ff4d2e;
+    --anti: #2e8fff;
+    --clean: #f0c040;
+    --result: #30e8a0;
+    --text: #e8eaf0;
+    --muted: rgba(232,234,240,0.45);
+    --accent: #2e8fff;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    overflow-x: hidden;
+    cursor: none;
+  }
+
+  /* Custom cursor */
+  #cursor {
+    position: fixed; top: 0; left: 0;
+    width: 12px; height: 12px;
+    background: var(--accent);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    transform: translate(-50%,-50%);
+    transition: transform 0.1s, width 0.2s, height 0.2s, opacity 0.2s;
+    mix-blend-mode: screen;
+  }
+  #cursor.big { width: 40px; height: 40px; opacity: 0.5; }
+
+  /* HERO */
+  #hero {
+    position: relative;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  #hero-canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+  }
+
+  .hero-content {
+    position: relative; z-index: 2;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  .hero-tag {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 1.5rem;
+    opacity: 0;
+    animation: fadeUp 0.8s 0.3s forwards;
+  }
+
+  .hero-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(3rem, 10vw, 8rem);
+    font-weight: 800;
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.5rem;
+    opacity: 0;
+    animation: fadeUp 0.8s 0.5s forwards;
+  }
+
+  .hero-title span { color: var(--noise); }
+
+  .hero-sub {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 2;
+    opacity: 0;
+    animation: fadeUp 0.8s 0.7s forwards;
+    max-width: 420px;
+    margin: 0 auto 2.5rem;
+  }
+
+  .scroll-hint {
+    position: absolute; bottom: 2.5rem; left: 50%;
+    transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    opacity: 0; animation: fadeUp 1s 1.2s forwards;
+    pointer-events: none;
+  }
+  .scroll-hint span { font-size: 10px; letter-spacing: 0.2em; color: var(--muted); }
+  .scroll-line {
+    width: 1px; height: 50px;
+    background: linear-gradient(to bottom, var(--accent), transparent);
+    animation: scrollPulse 1.5s ease-in-out infinite;
+  }
+
+  /* SIMULATION SECTION */
+  #simulation {
+    min-height: 100vh;
+    padding: 6rem 2rem;
+    position: relative;
+  }
+
+  .section-header {
+    text-align: center;
+    margin-bottom: 4rem;
+  }
+
+  .section-tag {
+    font-size: 10px; letter-spacing: 0.3em;
+    color: var(--accent); text-transform: uppercase;
+    margin-bottom: 1rem; display: block;
+  }
+
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 800;
+    line-height: 1.1;
+  }
+
+  /* Stage stepper */
+  .stepper {
+    display: flex;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 3rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    max-width: 700px;
+    margin-left: auto; margin-right: auto;
+  }
+
+  .step-btn {
+    flex: 1; padding: 12px 8px;
+    background: transparent;
+    border: none; border-right: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .step-btn:last-child { border-right: none; }
+  .step-btn.active {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+  }
+  .step-btn:hover:not(.active) { background: rgba(255,255,255,0.04); color: var(--text); }
+
+  /* Main sim area */
+  .sim-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 2px;
+    max-width: 1200px;
+    margin: 0 auto;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    min-height: 580px;
+  }
+
+  .sim-3d-panel {
+    background: var(--surface);
+    position: relative;
+    min-height: 480px;
+  }
+
+  #sim3d { width: 100%; height: 100%; min-height: 480px; display: block; }
+
+  .sim-info-panel {
+    background: #07090f;
+    border-left: 1px solid var(--border);
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    overflow-y: auto;
+  }
+
+  .info-label {
+    font-size: 9px; letter-spacing: 0.3em;
+    color: var(--accent); text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+
+  .info-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+  }
+
+  .info-desc {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 2;
+  }
+
+  .eq-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1rem;
+    font-size: 12px;
+    line-height: 2;
+    border-left: 2px solid var(--accent);
+  }
+
+  .eq-card .r { color: var(--noise); }
+  .eq-card .b { color: var(--anti); }
+  .eq-card .g { color: var(--result); }
+  .eq-card .y { color: var(--clean); }
+
+  /* Wave canvas panel */
+  #wavePanel {
+    max-width: 1200px;
+    margin: 2px auto 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--surface);
+    padding: 1.5rem;
+  }
+
+  .wave-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .wave-title { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+
+  .wave-legend {
+    display: flex; gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .wl-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); }
+  .wl-dot { width: 20px; height: 2px; border-radius: 2px; }
+
+  #waveCanvas { width: 100%; height: 130px; display: block; }
+
+  /* Vector section */
+  #vectorSection {
+    max-width: 1200px;
+    margin: 2px auto 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--surface);
+    padding: 1.5rem;
+  }
+
+  .vec-canvas-wrap { position: relative; }
+  #vecCanvas { width: 100%; height: 200px; display: block; }
+  .vec-label-overlay {
+    position: absolute;
+    bottom: 10px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+
+  /* Result badge */
+  .result-badge {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 2px;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    font-weight: 700;
+    text-transform: uppercase;
+    transition: all 0.4s;
+  }
+  .result-badge.ok { background: rgba(48,232,160,0.15); color: var(--result); border: 1px solid var(--result); }
+  .result-badge.hidden { opacity: 0; }
+
+  /* Nav controls */
+  .nav-controls {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 1.5rem;
+  }
+
+  .nav-btn {
+    padding: 10px 28px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    border-radius: 2px;
+  }
+  .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .nav-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .nav-btn.primary:hover { opacity: 0.85; }
+
+  /* MATH SECTION */
+  #mathSection {
+    padding: 6rem 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .math-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2px;
+    margin-top: 3rem;
+  }
+
+  .math-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 2rem;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }
+  .math-card:hover { border-color: rgba(46,143,255,0.3); }
+  .math-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+    transform: scaleX(0); transform-origin: left;
+    transition: transform 0.3s;
+  }
+  .math-card:hover::before { transform: scaleX(1); }
+
+  .math-card-num {
+    font-size: 48px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    color: rgba(255,255,255,0.04);
+    position: absolute; top: 1rem; right: 1.5rem;
+    line-height: 1;
+  }
+
+  .math-card-tag {
+    font-size: 9px; letter-spacing: 0.3em;
+    color: var(--accent); text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+
+  .math-card-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+  }
+
+  .math-card-eq {
+    font-size: 12px;
+    line-height: 2.2;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    padding-top: 0.75rem;
+    margin-top: 0.75rem;
+  }
+  .math-card-eq .hi { color: var(--text); }
+
+  /* Noise particles */
+  .noise-bg {
+    position: fixed; inset: 0;
+    pointer-events: none; z-index: 0;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-size: 200px 200px;
+  }
+
+  /* Animations */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scrollPulse {
+    0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes holePulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+  /* Pause button */
+  .pause-btn {
+    padding: 8px 20px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    border-radius: 2px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .pause-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .pause-btn.paused { border-color: var(--noise); color: var(--noise); background: rgba(255,77,46,0.06); }
+  .pause-btn .icon { width: 10px; height: 10px; display: flex; gap: 3px; align-items: center; }
+  .pause-btn .icon span {
+    display: block; background: currentColor; border-radius: 1px;
+    width: 3px; height: 10px;
+    transition: all 0.2s;
+  }
+  .pause-btn.paused .icon span:first-child {
+    width: 0; height: 0;
+    border-style: solid;
+    border-width: 5px 0 5px 9px;
+    border-color: transparent transparent transparent currentColor;
+    background: transparent; border-radius: 0;
+  }
+  .pause-btn.paused .icon span:last-child { display: none; }
+
+  /* 3D wave canvas */
+  #wave3dCanvas { width: 100%; height: 200px; display: block; margin-top: 1rem; }
+  .wave3d-label {
+    font-size: 9px; letter-spacing: 0.25em; color: var(--accent);
+    text-transform: uppercase; margin-top: 0.5rem;
+    text-align: center; opacity: 0.7;
+  }
+
+  /* Math equation animated cards */
+  .math-card-eq .eq-line {
+    display: flex; align-items: center; gap: 8px;
+    overflow: hidden;
+  }
+  .math-card-eq .eq-line .val {
+    display: inline-block;
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s;
+  }
+
+  /* Animated math proof section */
+  #liveProof {
+    max-width: 1200px;
+    margin: 2px auto 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    padding: 1.5rem 2rem;
+  }
+  .proof-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1.2rem;
+  }
+  .proof-title { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); }
+  .proof-steps {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1px;
+  }
+  .proof-step {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    padding: 1rem 1.2rem;
+    position: relative;
+    transition: border-color 0.4s, background 0.4s;
+  }
+  .proof-step.active {
+    border-color: rgba(46,143,255,0.4);
+    background: rgba(46,143,255,0.04);
+  }
+  .proof-step.done {
+    border-color: rgba(48,232,160,0.3);
+    background: rgba(48,232,160,0.03);
+  }
+  .proof-step-num {
+    font-size: 9px; letter-spacing: 0.2em; color: var(--muted);
+    margin-bottom: 0.4rem;
+  }
+  .proof-step-eq {
+    font-size: 12px; line-height: 1.9; color: var(--text);
+  }
+  .proof-step-eq .dim { color: var(--muted); }
+  .proof-tick {
+    position: absolute; top: 10px; right: 12px;
+    color: var(--result); font-size: 14px;
+    opacity: 0; transform: scale(0.5);
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .proof-step.done .proof-tick { opacity: 1; transform: scale(1); }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .sim-layout { grid-template-columns: 1fr; }
+    .sim-info-panel { border-left: none; border-top: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<div class="noise-bg"></div>
+<div id="cursor"></div>
+
+<!-- HERO -->
+<section id="hero">
+  <canvas id="hero-canvas"></canvas>
+  <div class="hero-content">
+    <div class="hero-tag">Mathematical Theory of Communication · EXTC Sem IV</div>
+    <div style="font-size:10px;letter-spacing:0.15em;color:rgba(232,234,240,0.35);margin-top:0.4rem;font-family:'Space Mono',monospace;">Developed by <span style="color:var(--accent)">Harsh Jaiswal</span> under the guidance of <span style="color:var(--accent)">Dr. Khimya Amlani</span></div>
+    <h1 class="hero-title">Active<br><span>Noise</span><br>Cancellation</h1>
+    <p class="hero-sub">How earbuds use vector mathematics to make noise disappear — an interactive 3D simulation</p>
+  </div>
+  <div class="scroll-hint">
+    <span>Explore</span>
+    <div class="scroll-line"></div>
+  </div>
+</section>
+
+<!-- SIMULATION -->
+<section id="simulation">
+  <div class="section-header">
+    <span class="section-tag">Interactive 3D Simulation</span>
+    <h2 class="section-title">Watch noise get<br>cancelled in real time</h2>
+  </div>
+
+  <div class="stepper" id="stepper">
+    <button class="step-btn active" onclick="setStage(0)">01 Clean Signal</button>
+    <button class="step-btn" onclick="setStage(1)">02 Noise Enters</button>
+    <button class="step-btn" onclick="setStage(2)">03 Anti-Noise</button>
+    <button class="step-btn" onclick="setStage(3)">04 Cancellation</button>
+    <button class="step-btn" onclick="setStage(4)">05 Result</button>
+  </div>
+
+  <div class="sim-layout">
+    <div class="sim-3d-panel" style="position:relative;">
+      <canvas id="sim3d"></canvas>
+      <div id="noiseHoleLabel" style="
+        display:none;
+        position:absolute;
+        top:18px; right:18px;
+        background:rgba(255,77,46,0.12);
+        border:1px solid rgba(255,77,46,0.4);
+        border-radius:3px;
+        padding:6px 12px;
+        font-size:9px;
+        letter-spacing:0.15em;
+        color:#ff4d2e;
+        font-family:'Space Mono',monospace;
+        text-transform:uppercase;
+        pointer-events:none;
+        animation: holePulse 1.2s ease-in-out infinite;
+      ">● Noise Entry Hole — ANC Mic Port</div>
+    </div>
+    <div class="sim-info-panel">
+      <div>
+        <div class="info-label" id="info-tag">Stage 01</div>
+        <div class="info-title" id="info-title">Clean Audio Signal s(t)</div>
+        <p class="info-desc" id="info-desc">Your music or voice — a pure sine wave travelling into the earbud. In vector space, this signal is represented as a list of sample values.</p>
+      </div>
+      <div>
+        <div class="info-label">Equation</div>
+        <div class="eq-card" id="eq-card">
+          <span class="y">s(t)</span> = A · sin(2π·f·t)<br>
+          Vector: <span class="y">s</span> = [s₀, s₁, ..., sₙ] ∈ ℝⁿ
+        </div>
+      </div>
+      <div>
+        <div class="info-label">MTC Module</div>
+        <p class="info-desc" id="module-tag" style="color:var(--accent);font-size:11px;">Module 2 — Vector Spaces: signals as vectors in ℝⁿ</p>
+      </div>
+      <div id="badge-wrap">
+        <span class="result-badge hidden" id="result-badge">Noise Cancelled!</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="wavePanel">
+    <div class="wave-header">
+      <span class="wave-title">Waveform Display</span>
+      <div style="display:flex;align-items:center;gap:1.5rem;flex-wrap:wrap;">
+        <div class="wave-legend">
+          <div class="wl-item"><div class="wl-dot" style="background:var(--clean)"></div>s(t) clean</div>
+          <div class="wl-item"><div class="wl-dot" style="background:var(--noise)"></div>n(t) noise</div>
+          <div class="wl-item"><div class="wl-dot" style="background:var(--anti);opacity:0.7" id="anti-leg"></div>−n(t) anti-noise</div>
+          <div class="wl-item"><div class="wl-dot" style="background:var(--result)"></div>e(t) residual</div>
+        </div>
+        <button class="pause-btn" id="pauseBtn" onclick="togglePause()">
+          <span class="icon"><span></span><span></span></span>
+          <span id="pauseLabel">Pause</span>
+        </button>
+      </div>
+    </div>
+    <canvas id="waveCanvas"></canvas>
+    <canvas id="wave3dCanvas"></canvas>
+    <div class="wave3d-label">3D perspective — wave cancellation in space · z-axis = amplitude</div>
+  </div>
+
+  <div id="vectorSection">
+    <div class="wave-header">
+      <span class="wave-title">Vector Cancellation — v + (−v) = 0</span>
+    </div>
+    <div class="vec-canvas-wrap">
+      <canvas id="vecCanvas"></canvas>
+    </div>
+  </div>
+
+
+  <!-- Live Math Proof -->
+  <div id="liveProof">
+    <div class="proof-header">
+      <span class="proof-title">Live Mathematical Working — Step by Step</span>
+      <span style="font-size:10px;color:var(--muted);">Equations update with simulation</span>
+    </div>
+    <div class="proof-steps" id="proofSteps">
+      <div class="proof-step" id="ps0">
+        <div class="proof-step-num">Given</div>
+        <div class="proof-step-eq">Clean signal<br><span style="color:var(--clean)">s(t) = A·sin(2πft)</span></div>
+        <span class="proof-tick">✓</span>
+      </div>
+      <div class="proof-step" id="ps1">
+        <div class="proof-step-num">Noise added</div>
+        <div class="proof-step-eq">Corrupted signal<br><span id="pf1" style="color:var(--muted)">x(t) = s(t) + n(t)</span></div>
+        <span class="proof-tick">✓</span>
+      </div>
+      <div class="proof-step" id="ps2">
+        <div class="proof-step-num">ANC generates</div>
+        <div class="proof-step-eq">Anti-noise vector<br><span id="pf2" style="color:var(--muted)">n̂(t) = −n(t)</span></div>
+        <span class="proof-tick">✓</span>
+      </div>
+      <div class="proof-step" id="ps3">
+        <div class="proof-step-num">Cancellation</div>
+        <div class="proof-step-eq">n(t) + (−n(t))<br><span id="pf3" style="color:var(--muted)">= 0 &nbsp;∀ t</span></div>
+        <span class="proof-tick">✓</span>
+      </div>
+      <div class="proof-step" id="ps4">
+        <div class="proof-step-num">Result</div>
+        <div class="proof-step-eq">Output signal<br><span id="pf4" style="color:var(--muted)">e(t) = s(t) ✓</span></div>
+        <span class="proof-tick">✓</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="nav-controls">
+    <button class="nav-btn" onclick="go(-1)">← Prev</button>
+    <button class="nav-btn primary" onclick="go(1)" id="next-btn">Next →</button>
+  </div>
+</section>
+
+
+<!-- BOSE ONLY SECTION -->
+<section id="inventedSection" style="padding:5rem 2rem;max-width:1200px;margin:0 auto;">
+  <div class="section-header">
+    <span class="section-tag">The Inventor of ANC</span>
+    <h2 class="section-title">Dr. Amar G. Bose<br>made silence possible.</h2>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;margin-top:3rem;" class="bose-grid">
+
+    <div class="math-card" style="border-top:2px solid var(--noise);">
+      <div class="math-card-num" style="font-size:36px;">1978</div>
+      <div class="math-card-tag" style="color:var(--noise);">The Napkin Moment</div>
+      <div class="math-card-title">A Flight That Changed Audio</div>
+      <div class="math-card-eq">On a transatlantic flight, <span class="hi">Dr. Amar G. Bose</span> put on the airline headphones and was shocked by how much engine noise drowned out the music. He grabbed a napkin and started sketching the mathematics of how to cancel it — right there on the plane.</div>
+    </div>
+
+    <div class="math-card" style="border-top:2px solid var(--anti);">
+      <div class="math-card-num" style="font-size:36px;">1989</div>
+      <div class="math-card-tag" style="color:var(--anti);">First Commercial ANC Headset</div>
+      <div class="math-card-title">Bose Aviation Headset X</div>
+      <div class="math-card-eq">After over a decade of R&D, <span class="hi">Bose Corporation</span> launched the world's first commercial ANC headset for aviation pilots in 1989. The same vector math sketched on that napkin — n(t) + (−n(t)) = 0 — was now running in real hardware.</div>
+    </div>
+
+    <div class="math-card" style="border-top:2px solid var(--result);">
+      <div class="math-card-num" style="font-size:36px;">Today</div>
+      <div class="math-card-tag" style="color:var(--result);">The Legacy</div>
+      <div class="math-card-title">ANC in Every Pocket</div>
+      <div class="math-card-eq">From Bose QuietComfort to Apple AirPods Pro to Sony WH-1000XM5 — every ANC device on the planet traces its lineage to Dr. Bose's napkin math. The same equations you're studying in MTC Sem IV are literally inside your earbuds.</div>
+    </div>
+
+  </div>
+</section>
+<style>
+@media (max-width: 700px) { .bose-grid { grid-template-columns: 1fr !important; } }
+</style>
+
+<!-- VECTOR DIAGRAM EXPLAINER -->
+<section id="vectorExplainer" style="padding:3rem 2rem 5rem;max-width:1200px;margin:0 auto;">
+  <div class="section-header">
+    <span class="section-tag">Understanding the Vector Diagram</span>
+    <h2 class="section-title">What is that<br>spinning diagram?</h2>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:3rem;" class="vec-explain-grid">
+
+    <div style="background:var(--surface);border:1px solid var(--border);padding:2rem;border-radius:4px;">
+      <div class="math-card-tag">What you are seeing</div>
+      <div class="math-card-title" style="font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:700;margin:0.5rem 0;">A Phasor / Vector Space Diagram</div>
+      <p style="font-size:11px;color:var(--muted);line-height:2;">
+        Each arrow (vector) represents a signal at one moment in time. The <span style="color:var(--clean)">yellow arrow</span> is your clean music s(t). The <span style="color:var(--noise)">red arrow</span> is noise n(t). The <span style="color:var(--anti)">blue arrow</span> is the anti-noise −n(t) generated by the ANC chip.<br><br>
+        The key insight: the red and blue arrows point in <strong>exactly opposite directions</strong>. When you add them, they cancel — just like +5 and −5 = 0. The green ripple rings show this cancellation happening in real time.
+      </p>
+    </div>
+
+    <div style="background:var(--surface);border:1px solid var(--border);padding:2rem;border-radius:4px;">
+      <div class="math-card-tag">Why it matters mathematically</div>
+      <div class="math-card-title" style="font-family:'Syne',sans-serif;font-size:1.2rem;font-weight:700;margin:0.5rem 0;">v + (−v) = 0 is the Core Law</div>
+      <p style="font-size:11px;color:var(--muted);line-height:2;">
+        This is Module 2 of your MTC syllabus — Vector Spaces. A signal is just a vector in ℝⁿ. ANC exploits the fundamental vector identity that any vector plus its negative is the zero vector.<br><br>
+        The spinning animation shows the vectors rotating over time as the wave cycles, but the relationship stays constant: noise and anti-noise always point in opposite directions, so they always cancel.
+      </p>
+      <div style="margin-top:1rem;padding:0.75rem;background:rgba(46,143,255,0.06);border:1px solid rgba(46,143,255,0.2);border-radius:3px;font-size:12px;line-height:2;">
+        <span style="color:var(--noise)">n</span> + <span style="color:var(--anti)">(−n)</span> = <span style="color:var(--result)">0</span> &nbsp;·&nbsp; 
+        Therefore: &nbsp;<span style="color:var(--clean)">s</span> + <span style="color:var(--result)">0</span> = <span style="color:var(--clean)">s</span> ✓
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<style>
+@media (max-width: 600px) {
+  .vec-explain-grid { grid-template-columns: 1fr !important; }
+}
+</style>
+
+<!-- MATH SECTION -->
+<section id="mathSection">
+  <div class="section-header">
+    <span class="section-tag">Mathematics Behind ANC</span>
+    <h2 class="section-title">Four equations.<br>Perfect silence.</h2>
+  </div>
+  <div class="math-grid">
+    <div class="math-card">
+      <div class="math-card-num">01</div>
+      <div class="math-card-tag">Vector Spaces · Module 2</div>
+      <div class="math-card-title">Signal as a Vector</div>
+      <div class="math-card-eq">
+        Signal: <span class="hi">s = [s₀, s₁, ..., sₙ] ∈ ℝⁿ</span><br>
+        Noise: <span class="hi" style="color:var(--noise)">n = [n₀, n₁, ..., nₙ] ∈ ℝⁿ</span><br>
+        Anti-noise: <span class="hi" style="color:var(--anti)">−n = [−n₀, −n₁, ..., −nₙ]</span>
+      </div>
+    </div>
+    <div class="math-card">
+      <div class="math-card-num">02</div>
+      <div class="math-card-tag">Vector Cancellation · Module 2</div>
+      <div class="math-card-title">Opposite Vectors Cancel</div>
+      <div class="math-card-eq">
+        <span class="hi" style="color:var(--noise)">n(t)</span> + <span class="hi" style="color:var(--anti)">(−n(t))</span> = <span class="hi" style="color:var(--result)">0</span><br>
+        Proof: ∀ i, nᵢ + (−nᵢ) = 0<br>
+        Therefore: <span class="hi">||n + (−n)|| = 0</span>
+      </div>
+    </div>
+    <div class="math-card">
+      <div class="math-card-num">03</div>
+      <div class="math-card-tag">LMS Algorithm · Module 5</div>
+      <div class="math-card-title">Adaptive Weight Update</div>
+      <div class="math-card-eq">
+        Error: <span class="hi">e(t) = d(t) − y(t)</span><br>
+        Update: <span class="hi">w(t+1) = w(t) + 2μ·e·x</span><br>
+        Converges when: <span class="hi">0 &lt; μ &lt; 1/(N·σ²)</span>
+      </div>
+    </div>
+    <div class="math-card">
+      <div class="math-card-num">04</div>
+      <div class="math-card-tag">Probability · Module 4</div>
+      <div class="math-card-title">Noise as Gaussian Process</div>
+      <div class="math-card-eq">
+        <span class="hi">n ~ N(0, σ²)</span><br>
+        p(n) = (1/√2πσ²) · e^(−n²/2σ²)<br>
+        MSE: <span class="hi">J(w) = E[e²(t)]</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ── CURSOR ──
+const cursor = document.getElementById('cursor');
+document.addEventListener('mousemove', e => {
+  cursor.style.left = e.clientX + 'px';
+  cursor.style.top  = e.clientY + 'px';
+});
+document.querySelectorAll('button,a').forEach(el => {
+  el.addEventListener('mouseenter', () => cursor.classList.add('big'));
+  el.addEventListener('mouseleave', () => cursor.classList.remove('big'));
+});
+
+// ── HERO CANVAS (animated noise wave background) ──
+(function() {
+  const cvs = document.getElementById('hero-canvas');
+  const ctx = cvs.getContext('2d');
+  let W, H, t = 0;
+  function resize() { W = cvs.width = cvs.offsetWidth; H = cvs.height = cvs.offsetHeight; }
+  resize(); window.addEventListener('resize', resize);
+
+  const lines = 8;
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (let l = 0; l < lines; l++) {
+      const phase = (l / lines) * Math.PI * 2;
+      const amp   = (30 + l * 12) * (1 - l / lines * 0.4);
+      const freq  = 0.008 + l * 0.002;
+      const y0    = H * 0.5 + (l - lines/2) * 28;
+      const alpha = 0.04 + (l % 3 === 0 ? 0.06 : 0);
+      const color = l % 3 === 0 ? `rgba(255,77,46,${alpha})` : l % 3 === 1 ? `rgba(46,143,255,${alpha})` : `rgba(48,232,160,${alpha})`;
+
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      for (let x = 0; x < W; x++) {
+        const y = y0 + amp * Math.sin(freq * x + t + phase) + (amp * 0.4) * Math.sin(freq * 2.3 * x - t * 1.5 + phase);
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    t += 0.018;
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+// ── THREE.JS EARBUD SIMULATION ──
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('sim3d'), antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x07090f, 1);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+camera.position.set(0, 1.5, 6);
+camera.lookAt(0, 0, 0);
+
+function resizeRenderer() {
+  const panel = document.querySelector('.sim-3d-panel');
+  const w = panel.offsetWidth;
+  const h = panel.offsetHeight || 480;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+resizeRenderer();
+window.addEventListener('resize', resizeRenderer);
+
+// Lights
+scene.add(new THREE.AmbientLight(0x2244aa, 0.6));
+const dirL = new THREE.DirectionalLight(0x4488ff, 1.2);
+dirL.position.set(3, 5, 5);
+scene.add(dirL);
+const pointL = new THREE.PointLight(0xff4d2e, 0.8, 20);
+pointL.position.set(-3, 2, 2);
+scene.add(pointL);
+const pointL2 = new THREE.PointLight(0x30e8a0, 0.5, 15);
+pointL2.position.set(3, -1, 2);
+scene.add(pointL2);
+
+// ── AirPods-style Earbud geometry ──
+const earbudGroup = new THREE.Group();
+scene.add(earbudGroup);
+
+const bodyMat = new THREE.MeshPhongMaterial({
+  color: 0xd0d8e8,
+  specular: 0xffffff,
+  shininess: 180,
+  transparent: true, opacity: 0.97
+});
+const darkMat = new THREE.MeshPhongMaterial({
+  color: 0x1a1f2e, specular: 0x4488ff, shininess: 120
+});
+
+// === Pod (round bulbous head — the part in your ear) ===
+const podGeo = new THREE.SphereGeometry(0.68, 32, 32);
+const pod = new THREE.Mesh(podGeo, bodyMat);
+pod.position.y = 0.3;
+pod.scale.set(1, 1.1, 0.92);
+earbudGroup.add(pod);
+
+// Inner ear tip (dark rubber tip)
+const tipGeo = new THREE.SphereGeometry(0.38, 32, 16, 0, Math.PI*2, Math.PI*0.5, Math.PI*0.6);
+const tipMat = new THREE.MeshPhongMaterial({ color: 0x111520, specular: 0x223355, shininess: 60 });
+const tip = new THREE.Mesh(tipGeo, tipMat);
+tip.position.y = -0.18;
+tip.rotation.x = Math.PI;
+earbudGroup.add(tip);
+
+// === Stem (longer flat stem like AirPods) ===
+const stemGeo = new THREE.CylinderGeometry(0.13, 0.10, 2.2, 20);
+const stem = new THREE.Mesh(stemGeo, bodyMat);
+stem.position.y = -1.5;
+stem.rotation.z = 0.08;
+earbudGroup.add(stem);
+
+// Stem bottom rounded cap
+const stemCapGeo = new THREE.SphereGeometry(0.10, 16, 16);
+const stemCap = new THREE.Mesh(stemCapGeo, bodyMat);
+stemCap.position.y = -2.6;
+earbudGroup.add(stemCap);
+
+// === Speaker grille (bottom of pod) ===
+const grilleGeo = new THREE.TorusGeometry(0.28, 0.035, 8, 36);
+const grilleMat = new THREE.MeshPhongMaterial({ color: 0x8899bb, emissive: 0x112244, shininess: 100 });
+const grille = new THREE.Mesh(grilleGeo, grilleMat);
+grille.position.y = -0.35;
+grille.rotation.x = Math.PI / 2;
+earbudGroup.add(grille);
+
+// Grille inner dots (3 small circles for mesh look)
+for (let i = 0; i < 3; i++) {
+  const ang = (i / 3) * Math.PI * 2;
+  const dg = new THREE.CylinderGeometry(0.04, 0.04, 0.02, 12);
+  const dm = new THREE.Mesh(dg, new THREE.MeshPhongMaterial({ color: 0x333a55 }));
+  dm.position.set(Math.cos(ang) * 0.13, -0.36, Math.sin(ang) * 0.13);
+  dm.rotation.x = Math.PI/2;
+  earbudGroup.add(dm);
+}
+
+// === NOISE ENTRY HOLE — the tiny hole on the back of the pod ===
+// This is the feedforward ANC microphone port
+const holeRingGeo = new THREE.TorusGeometry(0.10, 0.025, 8, 24);
+const holeRingMat = new THREE.MeshPhongMaterial({ color: 0x555e7a, emissive: 0x111827 });
+const holeRing = new THREE.Mesh(holeRingGeo, holeRingMat);
+holeRing.position.set(0.52, 0.55, 0.38);
+holeRing.rotation.y = 0.6;
+earbudGroup.add(holeRing);
+
+// Dark hole interior
+const holeDiskGeo = new THREE.CircleGeometry(0.08, 20);
+const holeDiskMat = new THREE.MeshPhongMaterial({ color: 0x050810, side: THREE.DoubleSide });
+const holeDisk = new THREE.Mesh(holeDiskGeo, holeDiskMat);
+holeDisk.position.set(0.53, 0.55, 0.39);
+holeDisk.rotation.y = 0.6;
+earbudGroup.add(holeDisk);
+
+// Glowing noise-entry label ring (animated red when noise is active)
+const noiseHoleGlowGeo = new THREE.TorusGeometry(0.14, 0.015, 8, 24);
+const noiseHoleGlowMat = new THREE.MeshPhongMaterial({
+  color: 0xff4d2e, emissive: 0xff2200, transparent: true, opacity: 0.0
+});
+const noiseHoleGlow = new THREE.Mesh(noiseHoleGlowGeo, noiseHoleGlowMat);
+noiseHoleGlow.position.set(0.52, 0.55, 0.38);
+noiseHoleGlow.rotation.y = 0.6;
+earbudGroup.add(noiseHoleGlow);
+
+// === ANC LED indicator on stem ===
+const ledGeo = new THREE.SphereGeometry(0.06, 16, 16);
+const ledMat = new THREE.MeshPhongMaterial({ color: 0x2e8fff, emissive: 0x1144cc, shininess: 200 });
+const led = new THREE.Mesh(ledGeo, ledMat);
+led.position.set(0.08, -1.2, 0.14);
+earbudGroup.add(led);
+
+// Microphone port on lower stem
+const micGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.03, 14);
+const micMat = new THREE.MeshPhongMaterial({ color: 0x777f99, specular: 0xffffff, shininess: 200 });
+const mic = new THREE.Mesh(micGeo, micMat);
+mic.position.set(0.14, -2.0, 0.0);
+mic.rotation.z = Math.PI/2;
+earbudGroup.add(mic);
+
+earbudGroup.rotation.z = 0.1;
+earbudGroup.position.set(-0.5, 0.3, 0);
+
+// ── Wave particles system ──
+const N_PARTICLES = 180;
+const noiseParticles   = [];
+const antiParticles    = [];
+const cleanParticles   = [];
+
+function makeParticleSystem(color, count) {
+  const geo = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({ color, size: 0.04, transparent: true, opacity: 0.8 });
+  const pts = new THREE.Points(geo, mat);
+  scene.add(pts);
+  return { pts, geo, positions, count, mat };
+}
+
+const noiseSys  = makeParticleSystem(0xff4d2e, N_PARTICLES);
+const antiSys   = makeParticleSystem(0x2e8fff, N_PARTICLES);
+const cleanSys  = makeParticleSystem(0xf0c040, N_PARTICLES);
+const resultSys = makeParticleSystem(0x30e8a0, N_PARTICLES);
+
+// ── Stages data ──
+const stages = [
+  {
+    label: '01', title: 'Clean Audio Signal s(t)',
+    desc: 'Your music or voice enters the earbud as a clean sine wave — a vector in ℝⁿ. No noise yet. The signal travels toward your ear drum.',
+    eq: '<span class="y">s(t)</span> = A · sin(2π·f·t)<br>Vector: <span class="y">s</span> = [s₀, s₁, ..., sₙ] ∈ ℝⁿ',
+    module: 'Module 2 — Vector Spaces: signals live in ℝⁿ',
+    badge: false,
+    showClean: true, showNoise: false, showAnti: false, showResult: false, residualSmall: false,
+  },
+  {
+    label: '02', title: 'External Noise n(t) Enters',
+    desc: 'Traffic, engine hum, crowd noise leaks into the earbud from outside. It adds directly onto your signal. The microphone picks up both — this corrupted mix reaches your ear.',
+    eq: 'Mic receives: <span class="r">x(t)</span> = <span class="y">s(t)</span> + <span class="r">n(t)</span><br>Vector addition: <span class="r">x</span> = <span class="y">s</span> + <span class="r">n</span>',
+    module: 'Module 2 — Vector addition in signal space',
+    badge: false,
+    showClean: true, showNoise: true, showAnti: false, showResult: false, residualSmall: false,
+  },
+  {
+    label: '03', title: 'ANC Creates Anti-Noise −n(t)',
+    desc: 'The ANC chip measures n(t) and generates a phase-inverted copy: −n(t). Every component is negated. Same magnitude, opposite direction — like −v in vector space.',
+    eq: 'ANC output: <span class="b">n̂(t)</span> = <span class="r">−n(t)</span><br>Negation: <span class="b">−n</span> = [−n₀, −n₁, ..., −nₙ]',
+    module: 'Module 2 — Vector negation, opposite direction',
+    badge: false,
+    showClean: true, showNoise: true, showAnti: true, showResult: false, residualSmall: false,
+  },
+  {
+    label: '04', title: 'Destructive Interference',
+    desc: 'The speaker emits −n(t) into the ear canal exactly when n(t) arrives. The two waves meet and cancel. This is vector cancellation: v + (−v) = 0.',
+    eq: '<span class="r">n(t)</span> + <span class="b">n̂(t)</span> = <span class="r">n</span> + <span class="b">(−n)</span> = <span class="g">0</span><br>∀ i: nᵢ + (−nᵢ) = 0 ✓',
+    module: 'Module 2 — v + (−v) = 0 vector identity',
+    badge: false,
+    showClean: true, showNoise: true, showAnti: true, showResult: true, residualSmall: false,
+  },
+  {
+    label: '05', title: 'Only Clean Signal Remains',
+    desc: 'Noise cancelled. You hear only s(t) — your music, crystal clear. The mathematics of vector spaces transformed chaotic noise into silence.',
+    eq: '<span class="y">s(t)</span> + <span class="r">n(t)</span> + <span class="b">(−n(t))</span><br>= <span class="y">s(t)</span> + <span class="g">0</span> = <span class="y">s(t)</span> ✓',
+    module: 'Result: only clean signal s(t) survives',
+    badge: true,
+    showClean: true, showNoise: false, showAnti: false, showResult: true, residualSmall: true,
+  },
+];
+
+let currentStage = 0;
+
+function setStage(idx) {
+  currentStage = idx;
+  const s = stages[idx];
+
+  document.querySelectorAll('.step-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  document.getElementById('info-tag').textContent    = 'Stage ' + s.label;
+  document.getElementById('info-title').textContent  = s.title;
+  document.getElementById('info-desc').textContent   = s.desc;
+  document.getElementById('eq-card').innerHTML       = s.eq;
+  document.getElementById('module-tag').textContent  = s.module;
+
+  const badge = document.getElementById('result-badge');
+  badge.classList.toggle('hidden', !s.badge);
+
+  document.getElementById('next-btn').textContent = idx === stages.length - 1 ? 'Restart →' : 'Next →';
+  updateProof(idx);
+  const holeLabel = document.getElementById('noiseHoleLabel');
+  if (holeLabel) holeLabel.style.display = stages[idx].showNoise ? 'block' : 'none';
+}
+
+function go(dir) {
+  setStage((currentStage + dir + stages.length) % stages.length);
+}
+
+// ── Wave canvas ──
+const waveCanvas = document.getElementById('waveCanvas');
+const wCtx = waveCanvas.getContext('2d');
+let waveT = 0;
+let isPaused = false;
+
+function togglePause() {
+  isPaused = !isPaused;
+  const btn = document.getElementById("pauseBtn");
+  const lbl = document.getElementById("pauseLabel");
+  btn.classList.toggle("paused", isPaused);
+  lbl.textContent = isPaused ? "Resume" : "Pause";
+}
+
+function resizeWave() {
+  waveCanvas.width  = waveCanvas.offsetWidth  * devicePixelRatio;
+  waveCanvas.height = waveCanvas.offsetHeight * devicePixelRatio;
+  wCtx.scale(devicePixelRatio, devicePixelRatio);
+}
+resizeWave();
+window.addEventListener('resize', resizeWave);
+
+function drawWaves() {
+  const W = waveCanvas.offsetWidth, H = waveCanvas.offsetHeight;
+  wCtx.clearRect(0, 0, W, H);
+
+  const s = stages[currentStage];
+  const mid = H / 2;
+  const scl = H * 0.4;
+
+  // grid
+  wCtx.strokeStyle = 'rgba(255,255,255,0.04)';
+  wCtx.lineWidth = 0.5;
+  [0.25, 0.5, 0.75].forEach(f => {
+    wCtx.beginPath(); wCtx.moveTo(0, H * f); wCtx.lineTo(W, H * f); wCtx.stroke();
+  });
+  wCtx.strokeStyle = 'rgba(255,255,255,0.12)';
+  wCtx.lineWidth = 0.8;
+  wCtx.beginPath(); wCtx.moveTo(0, mid); wCtx.lineTo(W, mid); wCtx.stroke();
+
+  const draw = (fn, color, lw, alpha, dashed) => {
+    wCtx.globalAlpha = alpha;
+    wCtx.strokeStyle = color;
+    wCtx.lineWidth = lw;
+    wCtx.setLineDash(dashed ? [6, 4] : []);
+    wCtx.beginPath();
+    for (let px = 0; px < W; px++) {
+      const t2 = px / W + waveT;
+      const y = mid - fn(t2) * scl;
+      px === 0 ? wCtx.moveTo(px, y) : wCtx.lineTo(px, y);
+    }
+    wCtx.stroke();
+    wCtx.globalAlpha = 1;
+    wCtx.setLineDash([]);
+  };
+
+  const noiseAmp = s.showNoise ? 0.6 : 0;
+  const antiAmp  = s.showAnti  ? 0.6 : 0;
+  const residual = s.residualSmall ? 0.04 : (s.showResult && s.showNoise ? 0.55 : (s.showResult ? 0.03 : 0));
+
+  if (s.showClean) draw(t => 0.65 * Math.sin(2 * Math.PI * 2 * t), '#f0c040', 2, 0.9, false);
+  if (noiseAmp)   draw(t => noiseAmp * Math.sin(2 * Math.PI * 3.1 * t + 0.5), '#ff4d2e', 1.5, 0.8, false);
+  if (antiAmp)    draw(t => -antiAmp * Math.sin(2 * Math.PI * 3.1 * t + 0.5), '#2e8fff', 1.5, 0.8, true);
+  if (residual)   draw(t => residual * Math.sin(2 * Math.PI * 3.1 * t + 0.9), '#30e8a0', 2.5, 1, false);
+
+  if (!isPaused) waveT += 0.008;
+}
+
+// ── Vector canvas ──
+const vecCanvas = document.getElementById('vecCanvas');
+const vCtx = vecCanvas.getContext('2d');
+
+function resizeVec() {
+  vecCanvas.width  = vecCanvas.offsetWidth  * devicePixelRatio;
+  vecCanvas.height = vecCanvas.offsetHeight * devicePixelRatio;
+  vCtx.scale(devicePixelRatio, devicePixelRatio);
+}
+resizeVec();
+window.addEventListener('resize', resizeVec);
+
+let vecT = 0;
+function drawVectors() {
+  const W = vecCanvas.offsetWidth, H = vecCanvas.offsetHeight;
+  vCtx.clearRect(0, 0, W, H);
+
+  const s = stages[currentStage];
+  const cx = W / 2, cy = H / 2;
+  const maxLen = Math.min(W, H) * 0.35;
+
+  // axes
+  vCtx.strokeStyle = 'rgba(255,255,255,0.08)';
+  vCtx.lineWidth = 0.5;
+  vCtx.beginPath(); vCtx.moveTo(40, cy); vCtx.lineTo(W - 40, cy); vCtx.stroke();
+  vCtx.beginPath(); vCtx.moveTo(cx, 20); vCtx.lineTo(cx, H - 20); vCtx.stroke();
+
+  // origin dot
+  vCtx.fillStyle = 'rgba(255,255,255,0.3)';
+  vCtx.beginPath(); vCtx.arc(cx, cy, 3, 0, Math.PI * 2); vCtx.fill();
+
+  const drawArrow = (fromX, fromY, toX, toY, color, label, alpha) => {
+    if (alpha < 0.01) return;
+    const dx = toX - fromX, dy = toY - fromY;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 2) return;
+    const angle = Math.atan2(dy, dx);
+
+    vCtx.globalAlpha = alpha;
+    vCtx.strokeStyle = color;
+    vCtx.lineWidth = 2.5;
+    vCtx.beginPath();
+    vCtx.moveTo(fromX, fromY);
+    vCtx.lineTo(toX, toY);
+    vCtx.stroke();
+
+    // arrowhead
+    vCtx.fillStyle = color;
+    vCtx.beginPath();
+    vCtx.moveTo(toX, toY);
+    vCtx.lineTo(toX - 10 * Math.cos(angle - 0.4), toY - 10 * Math.sin(angle - 0.4));
+    vCtx.lineTo(toX - 10 * Math.cos(angle + 0.4), toY - 10 * Math.sin(angle + 0.4));
+    vCtx.closePath(); vCtx.fill();
+
+    // label
+    if (label) {
+      vCtx.globalAlpha = alpha;
+      vCtx.fillStyle = color;
+      vCtx.font = 'bold 11px "Space Mono", monospace';
+      vCtx.textAlign = 'center';
+      vCtx.fillText(label, toX + 16 * Math.cos(angle), toY + 16 * Math.sin(angle));
+    }
+    vCtx.globalAlpha = 1;
+  };
+
+  // animated angle
+  const pulse = Math.sin(vecT * 0.8) * 0.08;
+  const noiseAngle  = -Math.PI * 0.18 + pulse;
+  const cleanAngle  = Math.PI * 0.10 + pulse * 0.5;
+  const antiAngle   = Math.PI - noiseAngle;
+
+  const noiseLen  = stages[currentStage].showNoise ? maxLen * 0.8 : 0;
+  const cleanLen  = stages[currentStage].showClean ? maxLen * 0.75 : 0;
+  const antiLen   = stages[currentStage].showAnti  ? maxLen * 0.8 : 0;
+  const resultLen = stages[currentStage].showResult && stages[currentStage].residualSmall ? maxLen * 0.05 : 0;
+
+  drawArrow(cx, cy, cx + cleanLen * Math.cos(cleanAngle), cy + cleanLen * Math.sin(cleanAngle), '#f0c040', 's(t)', 0.9);
+  drawArrow(cx, cy, cx + noiseLen * Math.cos(noiseAngle), cy + noiseLen * Math.sin(noiseAngle), '#ff4d2e', 'n(t)', noiseLen > 0 ? 0.9 : 0);
+  drawArrow(cx, cy, cx + antiLen  * Math.cos(antiAngle),  cy + antiLen  * Math.sin(antiAngle),  '#2e8fff', '−n(t)', antiLen > 0 ? 0.9 : 0);
+
+  // cancellation burst
+  if (s.showResult && s.showAnti) {
+    const bAlpha = 0.3 + 0.2 * Math.sin(vecT * 3);
+    vCtx.globalAlpha = bAlpha;
+    vCtx.strokeStyle = '#30e8a0';
+    vCtx.lineWidth = 1;
+    for (let r = 0; r < 3; r++) {
+      vCtx.beginPath();
+      vCtx.arc(cx, cy, 15 + r * 12 + (vecT * 20) % 30, 0, Math.PI * 2);
+      vCtx.stroke();
+    }
+    vCtx.globalAlpha = 1;
+
+    vCtx.fillStyle = '#30e8a0';
+    vCtx.font = 'bold 13px "Space Mono", monospace';
+    vCtx.textAlign = 'center';
+    vCtx.fillText('n + (−n) = 0', cx, cy - maxLen * 0.55);
+  }
+
+  if (s.residualSmall) {
+    vCtx.fillStyle = '#30e8a0';
+    vCtx.font = 'bold 14px "Space Mono", monospace';
+    vCtx.textAlign = 'center';
+    vCtx.fillText('s(t) + 0 = s(t)  ✓', cx, H - 20);
+  }
+
+  if (!isPaused) vecT += 0.03;
+}
+
+// ── THREE.JS animation particles ──
+let frame3d = 0;
+
+function updateParticles() {
+  const s = stages[currentStage];
+  const t = frame3d * 0.04;
+
+  // noise particles (travel from outside → earbud, red, rightward)
+  const nPos = noiseSys.positions;
+  for (let i = 0; i < N_PARTICLES; i++) {
+    const f  = (i / N_PARTICLES + t * 0.4) % 1;
+    const px = -5 + f * 6.5;
+    const phase = (i / N_PARTICLES) * Math.PI * 2;
+    const py = Math.sin(f * Math.PI * 6 + phase) * 0.5;
+    const pz = Math.cos(f * Math.PI * 4 + phase) * 0.3;
+    nPos[i * 3]     = px;
+    nPos[i * 3 + 1] = py;
+    nPos[i * 3 + 2] = pz;
+  }
+  noiseSys.geo.attributes.position.needsUpdate = true;
+  noiseSys.pts.visible = s.showNoise;
+
+  // anti-noise particles (emerge from earbud, blue, leftward)
+  const aPos = antiSys.positions;
+  for (let i = 0; i < N_PARTICLES; i++) {
+    const f  = (i / N_PARTICLES + t * 0.4) % 1;
+    const px = 1.5 - f * 5.5;
+    const phase = (i / N_PARTICLES) * Math.PI * 2 + Math.PI;
+    const py = Math.sin(f * Math.PI * 6 + phase) * 0.5;
+    const pz = Math.cos(f * Math.PI * 4 + phase) * 0.3;
+    aPos[i * 3]     = px;
+    aPos[i * 3 + 1] = py;
+    aPos[i * 3 + 2] = pz;
+  }
+  antiSys.geo.attributes.position.needsUpdate = true;
+  antiSys.pts.visible = s.showAnti;
+
+  // clean signal particles (gentle, yellow, circular around earbud)
+  const cPos = cleanSys.positions;
+  for (let i = 0; i < N_PARTICLES; i++) {
+    const f  = (i / N_PARTICLES + t * 0.2) % 1;
+    const angle = f * Math.PI * 2;
+    const r = 1.2 + 0.2 * Math.sin(f * Math.PI * 8 + t);
+    cPos[i * 3]     = -0.5 + r * Math.cos(angle) * 0.8;
+    cPos[i * 3 + 1] = r * Math.sin(angle) * 0.5;
+    cPos[i * 3 + 2] = 0.5 * Math.cos(f * Math.PI * 4);
+  }
+  cleanSys.geo.attributes.position.needsUpdate = true;
+  cleanSys.pts.visible = s.showClean;
+
+  // result particles (green ring expanding when cancel)
+  const rPos = resultSys.positions;
+  for (let i = 0; i < N_PARTICLES; i++) {
+    const f  = (i / N_PARTICLES + t * 0.5) % 1;
+    const angle = f * Math.PI * 2;
+    const r = s.residualSmall ? 0.5 + f * 0.3 : (s.showResult ? 0.8 + (t % 1.5) * 0.8 : 0);
+    const decay = s.showResult ? Math.max(0, 1 - (t % 1.5) / 1.5) : 0;
+    rPos[i * 3]     = -0.5 + r * Math.cos(angle);
+    rPos[i * 3 + 1] = r * Math.sin(angle) * 0.6;
+    rPos[i * 3 + 2] = 0;
+    resultSys.mat.opacity = s.residualSmall ? 0.7 : decay * 0.8;
+  }
+  resultSys.geo.attributes.position.needsUpdate = true;
+  resultSys.pts.visible = s.showResult;
+
+  // earbud LED pulsing
+  const pulseLed = 0.5 + 0.5 * Math.sin(t * 3);
+  if (s.showAnti) {
+    ledMat.emissive.setHex(0x1144cc);
+    ledMat.emissiveIntensity = pulseLed;
+  } else {
+    ledMat.emissiveIntensity = 0.1;
+  }
+
+  // Noise-entry hole pulsing — glows red when noise is entering
+  if (s.showNoise) {
+    const holeGlow = 0.4 + 0.6 * Math.abs(Math.sin(t * 4));
+    noiseHoleGlowMat.opacity = holeGlow * 0.85;
+    noiseHoleGlowMat.emissiveIntensity = holeGlow;
+  } else {
+    noiseHoleGlowMat.opacity = 0.0;
+  }
+
+  if (!isPaused) frame3d++;
+}
+
+
+// ── 3D Wave Canvas (perspective projection) ──
+const wave3dCanvas = document.getElementById('wave3dCanvas');
+const w3Ctx = wave3dCanvas.getContext('2d');
+
+function resizeWave3d() {
+  wave3dCanvas.width  = wave3dCanvas.offsetWidth  * devicePixelRatio;
+  wave3dCanvas.height = wave3dCanvas.offsetHeight * devicePixelRatio;
+  w3Ctx.scale(devicePixelRatio, devicePixelRatio);
+}
+resizeWave3d();
+window.addEventListener('resize', resizeWave3d);
+
+function project3d(x, y, z, W, H) {
+  // Isometric-ish projection
+  const fov = 400;
+  const camZ = 600;
+  const tiltX = 0.45; // tilt angle for 3d feel
+  const tiltY = 0.18;
+  // rotate around x axis by tiltX
+  const ry = y * Math.cos(tiltX) - z * Math.sin(tiltX);
+  const rz = y * Math.sin(tiltX) + z * Math.cos(tiltX);
+  // perspective
+  const scale = fov / (fov + rz + camZ * 0.3);
+  const px = W / 2 + x * scale;
+  const py = H * 0.55 + ry * scale;
+  return { px, py, scale };
+}
+
+function drawWave3d() {
+  const W = wave3dCanvas.offsetWidth;
+  const H = wave3dCanvas.offsetHeight;
+  w3Ctx.clearRect(0, 0, W, H);
+
+  const s = stages[currentStage];
+  const STEPS = 120;
+  const xRange = W * 0.75;
+  const ampScale = H * 0.32;
+
+  // Draw depth grid lines
+  w3Ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  w3Ctx.lineWidth = 0.5;
+  for (let i = 0; i <= 4; i++) {
+    const z = (i / 4 - 0.5) * 120;
+    const p0 = project3d(-xRange/2, 0, z, W, H);
+    const p1 = project3d( xRange/2, 0, z, W, H);
+    w3Ctx.beginPath();
+    w3Ctx.moveTo(p0.px, p0.py);
+    w3Ctx.lineTo(p1.px, p1.py);
+    w3Ctx.stroke();
+  }
+  // baseline
+  w3Ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+  w3Ctx.lineWidth = 1;
+  const b0 = project3d(-xRange/2, 0, 0, W, H);
+  const b1 = project3d( xRange/2, 0, 0, W, H);
+  w3Ctx.beginPath(); w3Ctx.moveTo(b0.px, b0.py); w3Ctx.lineTo(b1.px, b1.py); w3Ctx.stroke();
+
+  function draw3dWave(fn, color, lw, alpha, zOffset) {
+    if (alpha < 0.01) return;
+    w3Ctx.globalAlpha = alpha;
+    w3Ctx.strokeStyle = color;
+    w3Ctx.lineWidth = lw;
+    w3Ctx.setLineDash([]);
+    w3Ctx.beginPath();
+    for (let i = 0; i <= STEPS; i++) {
+      const t2 = i / STEPS + waveT;
+      const x = (i / STEPS - 0.5) * xRange;
+      const amp = fn(t2);
+      const y = amp * ampScale;
+      const z = zOffset;
+      const {px, py} = project3d(x, -y, z, W, H);
+      i === 0 ? w3Ctx.moveTo(px, py) : w3Ctx.lineTo(px, py);
+    }
+    w3Ctx.stroke();
+    w3Ctx.globalAlpha = 1;
+  }
+
+  // Draw vertical amplitude lines for cancellation effect (at cancellation stage)
+  if (s.showAnti && s.showNoise && (s.showResult || s.residualSmall)) {
+    for (let i = 0; i <= STEPS; i += 6) {
+      const t2 = i / STEPS + waveT;
+      const x = (i / STEPS - 0.5) * xRange;
+      const noise = 0.6 * Math.sin(2 * Math.PI * 3.1 * t2 + 0.5);
+      const anti  = -noise;
+      const yNoise = -noise * ampScale;
+      const yAnti  = -anti  * ampScale;
+      const p1 = project3d(x, yNoise, -30, W, H);
+      const p2 = project3d(x, yAnti,   30, W, H);
+      const mid = project3d(x, 0, 0, W, H);
+      w3Ctx.globalAlpha = 0.15;
+      w3Ctx.strokeStyle = '#30e8a0';
+      w3Ctx.lineWidth = 0.8;
+      w3Ctx.beginPath();
+      w3Ctx.moveTo(p1.px, p1.py);
+      w3Ctx.lineTo(mid.px, mid.py);
+      w3Ctx.lineTo(p2.px, p2.py);
+      w3Ctx.stroke();
+      w3Ctx.globalAlpha = 1;
+    }
+  }
+
+  // draw waves with slight z-offsets for depth
+  if (s.showClean) draw3dWave(t => 0.65 * Math.sin(2 * Math.PI * 2 * t), '#f0c040', 2.5, 0.9, -60);
+  if (s.showNoise) draw3dWave(t => 0.6  * Math.sin(2 * Math.PI * 3.1 * t + 0.5), '#ff4d2e', 2, 0.85, -20);
+  if (s.showAnti)  draw3dWave(t => -0.6 * Math.sin(2 * Math.PI * 3.1 * t + 0.5), '#2e8fff', 2, 0.85, 20);
+
+  const residual = s.residualSmall ? 0.04 : (s.showResult && s.showNoise ? 0.55 : (s.showResult ? 0.03 : 0));
+  if (residual) draw3dWave(t => residual * Math.sin(2 * Math.PI * 3.1 * t + 0.9), '#30e8a0', 3, 1, 60);
+
+  // Label axes
+  w3Ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  w3Ctx.font = '9px "Space Mono", monospace';
+  w3Ctx.textAlign = 'left';
+  const axEnd = project3d(xRange/2 + 20, 0, 0, W, H);
+  w3Ctx.fillText('t →', axEnd.px, axEnd.py + 4);
+
+  const zLabel = project3d(xRange/2 - 10, 0, 70, W, H);
+  w3Ctx.fillText('z', zLabel.px, zLabel.py);
+}
+
+// ── Update live proof panel ──
+function updateProof(stageIdx) {
+  const proofColors = ['var(--clean)', 'var(--noise)', 'var(--anti)', 'var(--result)', 'var(--result)'];
+  for (let i = 0; i < 5; i++) {
+    const el = document.getElementById('ps' + i);
+    el.classList.remove('active', 'done');
+    if (i < stageIdx) el.classList.add('done');
+    else if (i === stageIdx) el.classList.add('active');
+  }
+  // Highlight active equation colors
+  const eqColors = [null, 'var(--noise)', 'var(--anti)', 'var(--result)', 'var(--result)'];
+  ['pf1','pf2','pf3','pf4'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el) el.style.color = i + 1 <= stageIdx ? (eqColors[i+1] || 'var(--text)') : 'var(--muted)';
+  });
+}
+
+// ── Main loop ──
+function loop() {
+  requestAnimationFrame(loop);
+  earbudGroup.rotation.y += 0.004;
+  updateParticles();
+  drawWaves();
+  drawWave3d();
+  drawVectors();
+  renderer.render(scene, camera);
+}
+
+setStage(0);
+loop();
+</script>
+</body>
+</html>
+
+<!-- ══════════════════════════════════════════════ -->
+<!--  ANC AUDIO LAB — hear it happen live           -->
+<!-- ══════════════════════════════════════════════ -->
+<section id="audioLab" style="
+  padding: 6rem 2rem;
+  background: linear-gradient(180deg, var(--bg) 0%, #04060e 100%);
+  border-top: 1px solid var(--border);
+">
+<div style="max-width:1200px;margin:0 auto;">
+
+  <div class="section-header">
+    <span class="section-tag">🎧 Interactive ANC Audio Lab</span>
+    <h2 class="section-title">Hear the noise.<br>Hear it vanish.</h2>
+    <p style="font-size:12px;color:var(--muted);margin-top:1rem;line-height:2;">
+      Pick a clean signal · add noise · activate ANC · watch &amp; hear cancellation happen in real time
+    </p>
+  </div>
+
+  <!-- Step 1: Choose Signal -->
+  <div class="lab-card" id="labStep1">
+    <div class="lab-step-num">01</div>
+    <div class="lab-step-title">Choose Your Clean Signal</div>
+    <div class="lab-step-desc">Three synthesised audio signals — each a different frequency and character</div>
+    <div class="signal-grid">
+
+      <button class="sig-btn" id="sig0" onclick="selectSignal(0)">
+        <div class="sig-icon">♪</div>
+        <div class="sig-name">Pure Tone — 440 Hz</div>
+        <div class="sig-desc">Concert A — a single clean sine wave. The simplest signal. Used to tune instruments.</div>
+        <div class="sig-eq">s(t) = sin(2π · 440 · t)</div>
+      </button>
+
+      <button class="sig-btn" id="sig1" onclick="selectSignal(1)">
+        <div class="sig-icon">𝄞</div>
+        <div class="sig-name">Chord — 261 + 329 + 392 Hz</div>
+        <div class="sig-desc">C Major chord: three sine waves combined. Represents richer music signals with harmonics.</div>
+        <div class="sig-eq">s(t) = sin(2π·261·t) + sin(2π·329·t) + sin(2π·392·t)</div>
+      </button>
+
+      <button class="sig-btn" id="sig2" onclick="selectSignal(2)">
+        <div class="sig-icon">◉</div>
+        <div class="sig-name">Voice Band — 250–3400 Hz sweep</div>
+        <div class="sig-desc">Simulated speech frequency band — the range a phone or voice uses. Warmer, more complex.</div>
+        <div class="sig-eq">s(t) = Σ sin(2π·fₖ·t) · envelope(t)</div>
+      </button>
+
+    </div>
+  </div>
+
+  <!-- Step 2: Add Noise -->
+  <div class="lab-card lab-card-locked" id="labStep2">
+    <div class="lab-step-num">02</div>
+    <div class="lab-step-title">Add Environmental Noise</div>
+    <div class="lab-step-desc">Choose the type of noise leaking into your earbud</div>
+    <div class="signal-grid">
+
+      <button class="noise-btn" id="n0" onclick="selectNoise(0)">
+        <div class="sig-icon" style="color:var(--noise)">🚗</div>
+        <div class="sig-name">Traffic Hum — 80 Hz</div>
+        <div class="sig-desc">Low-frequency drone from engines and road. The most common noise ANC targets.</div>
+        <div class="sig-eq" style="color:var(--noise)">n(t) = 0.7·sin(2π·80·t)</div>
+      </button>
+
+      <button class="noise-btn" id="n1" onclick="selectNoise(1)">
+        <div class="sig-icon" style="color:var(--noise)">✈</div>
+        <div class="sig-name">Cabin Roar — 200 Hz</div>
+        <div class="sig-desc">Aircraft engine turbine frequency. The exact problem Dr. Bose wanted to solve on his flight.</div>
+        <div class="sig-eq" style="color:var(--noise)">n(t) = 0.8·sin(2π·200·t)</div>
+      </button>
+
+      <button class="noise-btn" id="n2" onclick="selectNoise(2)">
+        <div class="sig-icon" style="color:var(--noise)">🌊</div>
+        <div class="sig-name">White Noise — Broadband</div>
+        <div class="sig-desc">Random noise across all frequencies. The hardest to cancel — tests adaptive algorithms.</div>
+        <div class="sig-eq" style="color:var(--noise)">n(t) = σ·ξ(t), ξ ~ N(0,1)</div>
+      </button>
+
+    </div>
+  </div>
+
+  <!-- Step 3: ANC Controls + Live Display -->
+  <div class="lab-card lab-card-locked" id="labStep3">
+    <div class="lab-step-num">03</div>
+    <div class="lab-step-title">ANC Control Panel</div>
+    <div class="lab-step-desc">Run each stage and watch the waveform and math update live</div>
+
+    <!-- Big mode buttons -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:2rem;">
+      <button class="mode-btn active" id="modeClean" onclick="setMode('clean')">
+        <span style="color:var(--clean)">●</span> Clean Only
+      </button>
+      <button class="mode-btn" id="modeNoisy" onclick="setMode('noisy')">
+        <span style="color:var(--noise)">●</span> + Noise
+      </button>
+      <button class="mode-btn" id="modeANC" onclick="setMode('anc')">
+        <span style="color:var(--anti)">●</span> ANC Active
+      </button>
+      <button class="mode-btn" id="modeResult" onclick="setMode('result')">
+        <span style="color:var(--result)">●</span> Result Only
+      </button>
+    </div>
+
+    <!-- Volume slider -->
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;">
+      <span style="font-size:10px;letter-spacing:0.15em;color:var(--muted)">VOLUME</span>
+      <input type="range" id="volSlider" min="0" max="100" value="60"
+        style="flex:1;accent-color:var(--accent);" oninput="setVolume(this.value)">
+      <span id="volLabel" style="font-size:10px;color:var(--muted);width:30px">60%</span>
+    </div>
+
+    <!-- ANC strength slider -->
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:2rem;">
+      <span style="font-size:10px;letter-spacing:0.15em;color:var(--muted)">ANC STRENGTH</span>
+      <input type="range" id="ancSlider" min="0" max="100" value="95"
+        style="flex:1;accent-color:var(--anti);" oninput="setANCStrength(this.value)">
+      <span id="ancLabel" style="font-size:10px;color:var(--anti);width:30px">95%</span>
+    </div>
+
+    <!-- Live waveform canvas -->
+    <div style="background:#030508;border:1px solid var(--border);border-radius:3px;padding:1rem;margin-bottom:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+        <span style="font-size:9px;letter-spacing:0.25em;color:var(--muted);text-transform:uppercase;">Live Waveform — What You Hear</span>
+        <div style="display:flex;gap:1rem;font-size:9px;color:var(--muted);">
+          <span><span style="color:var(--clean)">━</span> signal</span>
+          <span><span style="color:var(--noise)">━</span> noise</span>
+          <span><span style="color:var(--anti)">- -</span> anti-noise</span>
+          <span><span style="color:var(--result)">━</span> output</span>
+        </div>
+      </div>
+      <canvas id="labWaveCanvas" style="width:100%;height:160px;display:block;"></canvas>
+    </div>
+
+    <!-- Live math readout -->
+    <div id="liveMathReadout" style="
+      background: rgba(46,143,255,0.04);
+      border: 1px solid rgba(46,143,255,0.15);
+      border-radius:3px;
+      padding:1.2rem 1.5rem;
+      font-size:12px;
+      line-height:2.2;
+    ">
+      <div style="font-size:9px;letter-spacing:0.25em;color:var(--accent);text-transform:uppercase;margin-bottom:0.75rem;">Live Mathematical Working</div>
+      <div id="mathLine1" style="color:var(--muted);">Select a signal and noise to begin...</div>
+      <div id="mathLine2" style="color:var(--muted);"></div>
+      <div id="mathLine3" style="color:var(--muted);"></div>
+      <div id="mathLine4" style="color:var(--muted);"></div>
+    </div>
+
+    <!-- Play/Stop -->
+    <div style="display:flex;gap:12px;margin-top:1.5rem;justify-content:center;">
+      <button class="nav-btn primary" id="playBtn" onclick="toggleAudioLab()">▶ Play Audio</button>
+      <button class="nav-btn" onclick="stopAudioLab()">■ Stop</button>
+    </div>
+    <div style="text-align:center;font-size:9px;color:var(--muted);margin-top:0.75rem;letter-spacing:0.1em;">
+      Uses Web Audio API — synthesised tones, no external files needed
+    </div>
+  </div>
+
+</div>
+</section>
+
+<!-- Audio Lab Styles -->
+<style>
+.lab-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2rem;
+  margin-bottom: 2px;
+  position: relative;
+  transition: opacity 0.4s;
+}
+.lab-card-locked { opacity: 0.4; pointer-events: none; }
+.lab-card-locked.unlocked { opacity: 1; pointer-events: all; }
+.lab-step-num {
+  font-family: 'Syne', sans-serif;
+  font-size: 3rem; font-weight: 800;
+  color: rgba(255,255,255,0.04);
+  position: absolute; top: 1.2rem; right: 1.5rem;
+  line-height: 1;
+}
+.lab-step-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.3rem; font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+.lab-step-desc { font-size: 11px; color: var(--muted); margin-bottom: 1.5rem; }
+
+.signal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+}
+@media (max-width:700px) { .signal-grid { grid-template-columns: 1fr; } }
+
+.sig-btn, .noise-btn {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1.2rem;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+}
+.sig-btn:hover, .noise-btn:hover {
+  border-color: rgba(46,143,255,0.4);
+  background: rgba(46,143,255,0.04);
+}
+.sig-btn.selected { border-color: var(--clean); background: rgba(240,192,64,0.07); }
+.noise-btn.selected { border-color: var(--noise); background: rgba(255,77,46,0.07); }
+
+.sig-icon { font-size: 1.8rem; margin-bottom: 0.5rem; }
+.sig-name { font-size: 11px; font-weight: 700; margin-bottom: 0.4rem; letter-spacing: 0.05em; }
+.sig-desc { font-size: 10px; color: var(--muted); line-height: 1.8; margin-bottom: 0.5rem; }
+.sig-eq { font-size: 9px; color: var(--clean); letter-spacing: 0.05em; font-style: italic; }
+
+.mode-btn {
+  padding: 8px 20px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  border-radius: 2px;
+}
+.mode-btn:hover { border-color: var(--accent); color: var(--text); }
+.mode-btn.active { background: rgba(255,255,255,0.06); border-color: var(--accent); color: var(--text); }
+</style>
+
+<!-- Audio Lab Script -->
+<script>
+(function() {
+
+// ── State ──
+let audioCtx = null;
+let sigChoice = -1, noiseChoice = -1;
+let currentMode = 'clean';
+let ancStrength = 0.95;
+let masterVol = 0.6;
+let isPlaying = false;
+
+// Active nodes
+let signalOscs = [], noiseNode = null, antiNoiseNode = null;
+let signalGain = null, noiseGain = null, antiGain = null, masterGain = null;
+let noiseScriptNode = null, noiseBuffer = null;
+
+// Signal definitions
+const SIGNALS = [
+  { name: 'Pure Tone 440 Hz',     freqs: [440],             amps: [1.0] },
+  { name: 'C Major Chord',        freqs: [261, 329, 392],   amps: [0.5, 0.4, 0.35] },
+  { name: 'Voice Band',           freqs: [280, 440, 700, 1100, 1800], amps: [0.4, 0.35, 0.3, 0.2, 0.15] },
+];
+const NOISES = [
+  { name: 'Traffic Hum 80 Hz',  type: 'sine',  freq: 80,  amp: 0.7 },
+  { name: 'Cabin Roar 200 Hz',  type: 'sine',  freq: 200, amp: 0.8 },
+  { name: 'White Noise',        type: 'white', freq: 0,   amp: 0.5 },
+];
+
+// ── UI helpers ──
+function selectSignal(i) {
+  sigChoice = i;
+  document.querySelectorAll('.sig-btn').forEach((b,j) => b.classList.toggle('selected', i===j));
+  checkUnlock();
+  updateMathDisplay();
+  if (isPlaying) { stopAudioLab(); startAudioLab(); }
+}
+function selectNoise(i) {
+  noiseChoice = i;
+  document.querySelectorAll('.noise-btn').forEach((b,j) => b.classList.toggle('selected', i===j));
+  checkUnlock();
+  updateMathDisplay();
+  if (isPlaying) { stopAudioLab(); startAudioLab(); }
+}
+function checkUnlock() {
+  if (sigChoice >= 0) {
+    document.getElementById('labStep2').classList.add('unlocked');
+  }
+  if (sigChoice >= 0 && noiseChoice >= 0) {
+    document.getElementById('labStep3').classList.add('unlocked');
+  }
+}
+const MODE_IDS = { clean: 'modeClean', noisy: 'modeNoisy', anc: 'modeANC', result: 'modeResult' };
+function setMode(m) {
+  currentMode = m;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  const el = document.getElementById(MODE_IDS[m]);
+  if (el) el.classList.add('active');
+  updateMathDisplay();
+  if (isPlaying) applyMode();
+}
+window.selectSignal = selectSignal;
+window.selectNoise  = selectNoise;
+window.setMode      = setMode;
+window.setVolume    = function(v) {
+  masterVol = v / 100;
+  document.getElementById('volLabel').textContent = v + '%';
+  if (masterGain) masterGain.gain.setTargetAtTime(masterVol, audioCtx.currentTime, 0.05);
+};
+window.setANCStrength = function(v) {
+  ancStrength = v / 100;
+  document.getElementById('ancLabel').textContent = v + '%';
+  updateMathDisplay();
+  if (isPlaying && antiGain) {
+    const noiseAmp = noiseChoice >= 0 ? NOISES[noiseChoice].amp : 0;
+    antiGain.gain.setTargetAtTime(noiseAmp * ancStrength, audioCtx.currentTime, 0.05);
+  }
+};
+
+// ── Audio engine ──
+function initCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+
+function startAudioLab() {
+  if (sigChoice < 0 || noiseChoice < 0) { alert('Please select a signal and a noise type first.'); return; }
+  initCtx();
+  isPlaying = true;
+  document.getElementById('playBtn').textContent = '⏸ Pause Audio';
+
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = masterVol;
+  masterGain.connect(audioCtx.destination);
+
+  // Signal oscillators
+  signalGain = audioCtx.createGain();
+  signalGain.gain.value = 1.0;
+  signalGain.connect(masterGain);
+
+  const sig = SIGNALS[sigChoice];
+  signalOscs = sig.freqs.map((f, i) => {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = f;
+    g.gain.value = sig.amps[i] * 0.3;
+    osc.connect(g);
+    g.connect(signalGain);
+    osc.start();
+    return { osc, g };
+  });
+
+  // Noise source
+  noiseGain = audioCtx.createGain();
+  noiseGain.gain.value = 0;
+  noiseGain.connect(masterGain);
+
+  const nd = NOISES[noiseChoice];
+  if (nd.type === 'white') {
+    const bufLen = audioCtx.sampleRate * 2;
+    noiseBuffer = audioCtx.createBuffer(1, bufLen, audioCtx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) data[i] = (Math.random() * 2 - 1) * nd.amp;
+    noiseNode = audioCtx.createBufferSource();
+    noiseNode.buffer = noiseBuffer;
+    noiseNode.loop = true;
+    noiseNode.connect(noiseGain);
+    noiseNode.start();
+  } else {
+    noiseNode = audioCtx.createOscillator();
+    noiseNode.type = 'sine';
+    noiseNode.frequency.value = nd.freq;
+    noiseNode.connect(noiseGain);
+    noiseNode.start();
+  }
+
+  // Anti-noise (phase-inverted noise)
+  antiGain = audioCtx.createGain();
+  antiGain.gain.value = 0;
+  antiGain.connect(masterGain);
+
+  const inverter = audioCtx.createGain();
+  inverter.gain.value = -1.0; // phase inversion = anti-noise
+
+  if (nd.type === 'white') {
+    const antiBuf = audioCtx.createBuffer(1, noiseBuffer.length, audioCtx.sampleRate);
+    const src = noiseBuffer.getChannelData(0);
+    const dst = antiBuf.getChannelData(0);
+    for (let i = 0; i < src.length; i++) dst[i] = -src[i]; // exact inverse
+    antiNoiseNode = audioCtx.createBufferSource();
+    antiNoiseNode.buffer = antiBuf;
+    antiNoiseNode.loop = true;
+    antiNoiseNode.connect(antiGain);
+    antiNoiseNode.start();
+  } else {
+    antiNoiseNode = audioCtx.createOscillator();
+    antiNoiseNode.type = 'sine';
+    antiNoiseNode.frequency.value = nd.freq;
+    const phaseShifter = audioCtx.createGain();
+    phaseShifter.gain.value = -nd.amp; // inverted amplitude = anti-noise
+    antiNoiseNode.connect(phaseShifter);
+    phaseShifter.connect(antiGain);
+    antiNoiseNode.start();
+    // override antiGain to 1 so phaseShifter controls amplitude
+    antiGain.gain.value = 0;
+  }
+
+  applyMode();
+  startLabWaveform();
+}
+
+function applyMode() {
+  if (!noiseGain) return;
+  const nd = noiseChoice >= 0 ? NOISES[noiseChoice] : null;
+  const noiseAmp = nd ? nd.amp * 0.3 : 0;
+
+  if (currentMode === 'clean') {
+    signalGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.1);
+    noiseGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+    antiGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+  } else if (currentMode === 'noisy') {
+    signalGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.1);
+    noiseGain.gain.setTargetAtTime(noiseAmp, audioCtx.currentTime, 0.1);
+    antiGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+  } else if (currentMode === 'anc') {
+    signalGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.1);
+    noiseGain.gain.setTargetAtTime(noiseAmp, audioCtx.currentTime, 0.1);
+    // anti-noise gain: partial cancellation based on ANC strength
+    // For oscillator: already inverted via phaseShifter
+    if (nd && nd.type !== 'white') {
+      // Use a separate gain for anti-noise osc
+      antiGain.gain.setTargetAtTime(ancStrength, audioCtx.currentTime, 0.1);
+    } else {
+      antiGain.gain.setTargetAtTime(ancStrength, audioCtx.currentTime, 0.1);
+    }
+  } else if (currentMode === 'result') {
+    // result: signal + residual (very small noise)
+    signalGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.1);
+    noiseGain.gain.setTargetAtTime(noiseAmp * (1 - ancStrength), audioCtx.currentTime, 0.1);
+    antiGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+  }
+}
+
+function stopAudioLab() {
+  isPlaying = false;
+  document.getElementById('playBtn').textContent = '▶ Play Audio';
+  try {
+    signalOscs.forEach(s => s.osc.stop());
+    if (noiseNode) noiseNode.stop && noiseNode.stop();
+    if (antiNoiseNode) antiNoiseNode.stop && antiNoiseNode.stop();
+  } catch(e) {}
+  signalOscs = [];
+  noiseNode = null; antiNoiseNode = null;
+  signalGain = null; noiseGain = null; antiGain = null; masterGain = null;
+  labWaveRunning = false;
+}
+window.stopAudioLab = stopAudioLab;
+
+window.toggleAudioLab = function() {
+  if (isPlaying) stopAudioLab();
+  else startAudioLab();
+};
+
+// ── Live waveform ──
+let labWaveRunning = false;
+let labWaveT = 0;
+const labWaveCanvas = document.getElementById('labWaveCanvas');
+const lwCtx = labWaveCanvas.getContext('2d');
+
+function resizeLabWave() {
+  labWaveCanvas.width  = labWaveCanvas.offsetWidth  * devicePixelRatio;
+  labWaveCanvas.height = labWaveCanvas.offsetHeight * devicePixelRatio;
+  lwCtx.scale(devicePixelRatio, devicePixelRatio);
+}
+resizeLabWave();
+window.addEventListener('resize', resizeLabWave);
+
+function startLabWaveform() {
+  labWaveRunning = true;
+  requestAnimationFrame(drawLabWave);
+}
+
+function drawLabWave() {
+  if (!labWaveRunning) return;
+  requestAnimationFrame(drawLabWave);
+
+  const W = labWaveCanvas.offsetWidth, H = labWaveCanvas.offsetHeight;
+  lwCtx.clearRect(0, 0, W, H);
+
+  // grid
+  lwCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+  lwCtx.lineWidth = 0.5;
+  [0.25, 0.5, 0.75].forEach(f => {
+    lwCtx.beginPath(); lwCtx.moveTo(0, H*f); lwCtx.lineTo(W, H*f); lwCtx.stroke();
+  });
+  lwCtx.strokeStyle = 'rgba(255,255,255,0.12)';
+  lwCtx.lineWidth = 1;
+  lwCtx.beginPath(); lwCtx.moveTo(0,H/2); lwCtx.lineTo(W,H/2); lwCtx.stroke();
+
+  const mid = H / 2, scl = H * 0.38;
+  const sig = sigChoice >= 0 ? SIGNALS[sigChoice] : null;
+  const nd  = noiseChoice >= 0 ? NOISES[noiseChoice] : null;
+
+  function sigVal(t) {
+    if (!sig) return 0;
+    return sig.freqs.reduce((s, f, i) => s + sig.amps[i] * Math.sin(2*Math.PI*f*t*0.001), 0) * 0.35;
+  }
+  function noiseVal(t) {
+    if (!nd) return 0;
+    if (nd.type === 'white') return (Math.sin(t*97.3)*0.7 + Math.sin(t*233.1)*0.5 + Math.sin(t*419.7)*0.4) * nd.amp * 0.25;
+    return nd.amp * 0.6 * Math.sin(2*Math.PI*nd.freq*t*0.001);
+  }
+
+  function drawLine(fn, color, lw, alpha, dashed) {
+    lwCtx.globalAlpha = alpha;
+    lwCtx.strokeStyle = color;
+    lwCtx.lineWidth = lw;
+    lwCtx.setLineDash(dashed ? [5,4] : []);
+    lwCtx.beginPath();
+    for (let px = 0; px < W; px++) {
+      const t2 = px + labWaveT;
+      const y = mid - fn(t2) * scl;
+      px===0 ? lwCtx.moveTo(px,y) : lwCtx.lineTo(px,y);
+    }
+    lwCtx.stroke();
+    lwCtx.globalAlpha = 1; lwCtx.setLineDash([]);
+  }
+
+  const showNoise  = currentMode === 'noisy' || currentMode === 'anc';
+  const showAnti   = currentMode === 'anc';
+  const showResult = currentMode === 'result';
+
+  // Clean signal always drawn
+  if (!showResult) drawLine(t => sigVal(t), '#f0c040', 2.5, 0.9, false);
+
+  // Noise
+  if (showNoise) drawLine(t => noiseVal(t), '#ff4d2e', 2, 0.85, false);
+
+  // Anti-noise (inverted)
+  if (showAnti) drawLine(t => -noiseVal(t) * ancStrength, '#2e8fff', 2, 0.85, true);
+
+  // Result = signal + residual noise
+  if (showResult) {
+    const residual = 1 - ancStrength;
+    drawLine(t => sigVal(t) + noiseVal(t)*residual, '#30e8a0', 2.5, 1, false);
+  }
+
+  // In ANC mode: also show output (signal + tiny residual)
+  if (showAnti) {
+    const residual = 1 - ancStrength;
+    drawLine(t => sigVal(t) + noiseVal(t)*residual, '#30e8a0', 2, 0.7, false);
+  }
+
+  labWaveT += isPaused ? 0 : 1.8;
+}
+
+// Always draw even when not playing (static view)
+(function staticTick() {
+  requestAnimationFrame(function() {
+    if (!labWaveRunning) { drawLabWave_static(); }
+    staticTick();
+  });
+})();
+
+function drawLabWave_static() {
+  if (labWaveRunning) return;
+  const W = labWaveCanvas.offsetWidth, H = labWaveCanvas.offsetHeight;
+  lwCtx.clearRect(0,0,W,H);
+  lwCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+  lwCtx.lineWidth = 0.5;
+  [0.25,0.5,0.75].forEach(f => {
+    lwCtx.beginPath(); lwCtx.moveTo(0,H*f); lwCtx.lineTo(W,H*f); lwCtx.stroke();
+  });
+  lwCtx.strokeStyle = 'rgba(255,255,255,0.08)';
+  lwCtx.lineWidth = 1;
+  lwCtx.beginPath(); lwCtx.moveTo(0,H/2); lwCtx.lineTo(W,H/2); lwCtx.stroke();
+  lwCtx.fillStyle = 'rgba(255,255,255,0.12)';
+  lwCtx.font = '10px "Space Mono",monospace';
+  lwCtx.textAlign = 'center';
+  lwCtx.fillText('Select signal & noise, then press Play', W/2, H/2 + 20);
+}
+
+// ── Math display ──
+function updateMathDisplay() {
+  const sig = sigChoice >= 0 ? SIGNALS[sigChoice] : null;
+  const nd  = noiseChoice >= 0 ? NOISES[noiseChoice] : null;
+  const l1 = document.getElementById('mathLine1');
+  const l2 = document.getElementById('mathLine2');
+  const l3 = document.getElementById('mathLine3');
+  const l4 = document.getElementById('mathLine4');
+
+  if (!sig) {
+    l1.innerHTML = '<span style="color:var(--muted)">← Select a signal above to begin</span>';
+    l2.innerHTML = ''; l3.innerHTML = ''; l4.innerHTML = '';
+    return;
+  }
+
+  const sigEq = sig.freqs.map((f,i) => `${sig.amps[i].toFixed(2)}·sin(2π·${f}·t)`).join(' + ');
+
+  if (!nd) {
+    l1.innerHTML = `<span style="color:var(--clean)">s(t)</span> = ${sigEq}`;
+    l2.innerHTML = '<span style="color:var(--muted)">← Now select a noise type</span>';
+    l3.innerHTML = ''; l4.innerHTML = '';
+    return;
+  }
+
+  const noiseEq = nd.type === 'white' ? `σ·ξ(t),  ξ ~ N(0,1)` : `${nd.amp}·sin(2π·${nd.freq}·t)`;
+  const residual = ((1 - ancStrength) * 100).toFixed(1);
+
+  if (currentMode === 'clean') {
+    l1.innerHTML = `<span style="color:var(--clean)">s(t)</span> = ${sigEq}`;
+    l2.innerHTML = `Output = <span style="color:var(--clean)">s(t)</span>  — pure signal, no noise added yet`;
+    l3.innerHTML = ''; l4.innerHTML = '';
+  } else if (currentMode === 'noisy') {
+    l1.innerHTML = `<span style="color:var(--clean)">s(t)</span> = ${sigEq}`;
+    l2.innerHTML = `<span style="color:var(--noise)">n(t)</span> = ${noiseEq}`;
+    l3.innerHTML = `Mic output: <span style="color:var(--noise)">x(t)</span> = <span style="color:var(--clean)">s(t)</span> + <span style="color:var(--noise)">n(t)</span>  — corrupted signal`;
+    l4.innerHTML = `SNR dropped — noise is masking the signal`;
+  } else if (currentMode === 'anc') {
+    l1.innerHTML = `ANC generates: <span style="color:var(--anti)">n̂(t)</span> = −<span style="color:var(--noise)">n(t)</span> = −[${noiseEq}]`;
+    l2.innerHTML = `Cancellation: <span style="color:var(--noise)">n(t)</span> + <span style="color:var(--anti)">(−n(t))</span> = <span style="color:var(--result)">0</span>  (at ${(ancStrength*100).toFixed(0)}% efficiency)`;
+    l3.innerHTML = `Residual noise: <span style="color:var(--result)">${residual}%</span> of original remains`;
+    l4.innerHTML = `Output ≈ <span style="color:var(--clean)">s(t)</span> + ε,  where ε → 0 as ANC strength → 100%`;
+  } else if (currentMode === 'result') {
+    l1.innerHTML = `<span style="color:var(--result)">e(t)</span> = <span style="color:var(--clean)">s(t)</span> + <span style="color:var(--noise)">n(t)</span> + <span style="color:var(--anti)">(−n(t))</span>`;
+    l2.innerHTML = `= <span style="color:var(--clean)">s(t)</span> + <span style="color:var(--result)">0</span>  = <span style="color:var(--clean)">s(t)</span>  ✓  — noise cancelled!`;
+    l3.innerHTML = `Residual: <span style="color:var(--result)">${residual}%</span> · Signal recovered at ${(ancStrength*100).toFixed(0)}% fidelity`;
+    l4.innerHTML = `v + (−v) = 0  →  n + (−n) = 0  →  only s(t) survives ✓`;
+  }
+}
+
+updateMathDisplay();
+
+})();
+</script>

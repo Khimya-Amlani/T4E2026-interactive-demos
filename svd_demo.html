@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SVD Image Compression</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Bebas+Neue&display=swap');
+
+/* ═══════════════════════════════════════════════
+   THEME: Deep Navy · Brilliant White · Orange · Lime
+   Maximum contrast — perfect for projector
+════════════════════════════════════════════════ */
+:root {
+  --bg:        #05091a;       /* deep navy black */
+  --bg2:       #0a1128;       /* slightly lighter navy */
+  --card:      #0e1530;       /* card background */
+  --card2:     #121a38;       /* slightly lighter card */
+  --border:    rgba(255,255,255,0.1);
+  --border2:   rgba(255,255,255,0.06);
+
+  --white:     #ffffff;       /* pure white text */
+  --offwhite:  #e8edf8;       /* body text */
+  --muted:     #8a9abf;       /* secondary text — still readable */
+  --dimmed:    #5a6a90;       /* least important text */
+
+  --orange:    #ff7b2f;       /* primary accent — electric orange */
+  --orange2:   #ffaa60;       /* lighter orange for hover */
+  --lime:      #b8ff47;       /* secondary accent — vivid lime */
+  --lime2:     #d4ff80;       /* lighter lime */
+  --sky:       #60c8ff;       /* info/highlight — sky blue (not dark!) */
+  --rose:      #ff5e7e;       /* warning / low-K */
+  --teal:      #2ee8c0;       /* SVD matrix color */
+
+  --shadow:    rgba(0,0,0,0.6);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--offwhite);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* subtle dot-grid background */
+body::after {
+  content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+  background-image: radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* ═══════════════ HEADER ═══════════════ */
+header {
+  position: relative; z-index: 10;
+  padding: 3rem 4rem 2.5rem;
+  background: linear-gradient(160deg, #091030 0%, #05091a 60%);
+  border-bottom: 2px solid var(--orange);
+  overflow: hidden;
+}
+
+/* decorative top-right glow */
+header::before {
+  content:''; position:absolute; top:-80px; right:-80px;
+  width:400px; height:400px; border-radius:50%;
+  background: radial-gradient(circle, rgba(255,123,47,0.15) 0%, transparent 65%);
+  pointer-events:none;
+}
+/* decorative bottom-left glow */
+header::after {
+  content:''; position:absolute; bottom:-60px; left:100px;
+  width:300px; height:300px; border-radius:50%;
+  background: radial-gradient(circle, rgba(96,200,255,0.08) 0%, transparent 65%);
+  pointer-events:none; animation: floatBlue 8s ease-in-out infinite;
+}
+@keyframes floatBlue{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-20px)} }
+
+.header-top {
+  display:flex; justify-content:space-between; align-items:flex-start;
+  flex-wrap:wrap; gap:1rem; margin-bottom:1.5rem;
+}
+.event-tag {
+  font-family:'JetBrains Mono',monospace; font-size:0.7rem;
+  color: var(--orange2); letter-spacing:3px; text-transform:uppercase;
+  border:1px solid rgba(255,123,47,0.4); padding:0.35rem 1rem;
+  border-radius:3px; background:rgba(255,123,47,0.08);
+}
+.header-badges { display:flex; gap:0.6rem; flex-wrap:wrap; }
+.badge {
+  font-family:'JetBrains Mono',monospace; font-size:0.62rem;
+  padding:0.3rem 0.8rem; border-radius:20px; letter-spacing:1px; font-weight:700;
+}
+.b-orange { background:rgba(255,123,47,0.15); color:var(--orange); border:1.5px solid rgba(255,123,47,0.5); }
+.b-lime   { background:rgba(184,255,71,0.1);  color:var(--lime);   border:1.5px solid rgba(184,255,71,0.4); }
+.b-sky    { background:rgba(96,200,255,0.1);  color:var(--sky);    border:1.5px solid rgba(96,200,255,0.4); }
+
+h1.hero-title {
+  font-family:'Bebas Neue',sans-serif;
+  font-size: clamp(3rem,8vw,6.5rem);
+  line-height:0.92; letter-spacing:4px;
+  color: var(--white);
+  margin-bottom:0.6rem;
+  text-shadow: 0 0 60px rgba(255,123,47,0.25);
+}
+h1.hero-title span.hi { color: var(--orange); }
+
+.hero-sub {
+  font-family:'JetBrains Mono',monospace;
+  font-size:0.82rem; color:var(--muted); letter-spacing:2px; margin-bottom:2rem;
+}
+
+.formula-hero {
+  display:inline-flex; align-items:center; gap:1.2rem; flex-wrap:wrap;
+  background:rgba(255,255,255,0.04); border:1.5px solid rgba(255,123,47,0.3);
+  padding:1rem 2rem; border-radius:6px;
+  font-family:'JetBrains Mono',monospace; font-size:1.4rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+.f-A { color:#c084fc; font-size:1.8rem; font-weight:700; }
+.f-U { color:var(--sky); font-size:1.8rem; font-weight:700; }
+.f-S { color:var(--orange); font-size:1.8rem; font-weight:700; }
+.f-V { color:var(--lime); font-size:1.8rem; font-weight:700; }
+.f-op { color:var(--muted); font-size:1.4rem; }
+.f-note { color:var(--dimmed); font-size:0.75rem; font-family:'JetBrains Mono',monospace; }
+
+/* ═══════════════ MAIN ═══════════════ */
+main {
+  position:relative; z-index:10;
+  max-width:1280px; margin:0 auto;
+  padding:2.5rem 4rem 6rem;
+}
+
+/* ── Progress ── */
+.progress-bar {
+  height:4px; background:rgba(255,255,255,0.07);
+  border-radius:2px; margin-bottom:2rem; overflow:hidden;
+}
+.progress-fill {
+  height:100%; border-radius:2px;
+  background:linear-gradient(90deg, var(--orange), var(--lime));
+  transition:width 0.5s cubic-bezier(0.34,1.2,0.64,1);
+}
+
+/* ── Step Nav ── */
+.step-nav {
+  display:flex; margin-bottom:2rem;
+  background:var(--card); border:1.5px solid var(--border2);
+  border-radius:8px; overflow:hidden;
+}
+.step-btn {
+  flex:1; padding:0.85rem 0.4rem;
+  background:transparent; border:none; cursor:pointer;
+  color:var(--dimmed); font-family:'Rajdhani',sans-serif;
+  font-size:0.85rem; font-weight:700; letter-spacing:1px;
+  transition:all 0.25s; border-right:1px solid var(--border2);
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+}
+.step-btn:last-child { border-right:none; }
+.step-btn .snum {
+  font-family:'JetBrains Mono',monospace;
+  font-size:0.58rem; opacity:0.5;
+}
+.step-btn:hover { background:rgba(255,255,255,0.04); color:var(--offwhite); }
+.step-btn.active {
+  background:rgba(255,123,47,0.12);
+  color:var(--orange);
+  box-shadow:inset 0 -3px 0 var(--orange);
+}
+.step-btn.active .snum { color:var(--orange); opacity:1; }
+.step-btn.done { color:var(--lime); }
+.step-btn.done .snum { color:var(--lime); opacity:0.8; }
+
+/* ── Stages ── */
+.stage { display:none; }
+.stage.active { display:block; animation:fadeUp 0.4s ease forwards; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── Section labels ── */
+.sec-label {
+  font-family:'JetBrains Mono',monospace; font-size:0.62rem;
+  color:var(--orange); letter-spacing:4px; text-transform:uppercase;
+  margin-bottom:0.6rem;
+}
+.sec-title {
+  font-family:'Bebas Neue',sans-serif; font-size:2.4rem;
+  letter-spacing:2px; color:var(--white); margin-bottom:1.2rem;
+}
+
+/* ── Cards ── */
+.card {
+  background:var(--card); border:1.5px solid var(--border2);
+  border-radius:10px; padding:1.8rem;
+  transition:border-color 0.3s, box-shadow 0.3s;
+}
+.card:hover { border-color:rgba(255,123,47,0.3); box-shadow:0 4px 24px rgba(255,123,47,0.08); }
+.c-orange { border-color:rgba(255,123,47,0.3); }
+.c-lime   { border-color:rgba(184,255,71,0.25); }
+.c-sky    { border-color:rgba(96,200,255,0.25); }
+.c-rose   { border-color:rgba(255,94,126,0.3); }
+
+.card h2 { font-family:'Bebas Neue',sans-serif; font-size:1.6rem; letter-spacing:1px; margin-bottom:0.5rem; }
+.card p  { color:var(--muted); font-size:1rem; line-height:1.7; }
+.card strong { color:var(--offwhite); }
+
+/* ── Layouts ── */
+.two-col   { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; align-items:start; }
+.three-col { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1.2rem; }
+
+/* ── Canvas wrap ── */
+.canvas-wrap {
+  background:#060c1f; border:1.5px solid var(--border2);
+  border-radius:10px; padding:1.5rem; text-align:center;
+}
+.canvas-wrap canvas { border-radius:6px; display:block; margin:0 auto; image-rendering:pixelated; }
+.canvas-label {
+  font-family:'JetBrains Mono',monospace; font-size:0.68rem;
+  color:var(--muted); margin-top:0.8rem; letter-spacing:1px;
+}
+
+/* ── Matrix grid ── */
+.mat-grid {
+  display:grid; gap:2px;
+  font-family:'JetBrains Mono',monospace; font-size:0.6rem;
+  width:fit-content; margin:1rem auto;
+}
+.mat-cell {
+  width:36px; height:24px; display:flex; align-items:center; justify-content:center;
+  border-radius:2px; font-weight:700; transition:transform 0.15s; cursor:default;
+}
+.mat-cell:hover { transform:scale(1.4); z-index:5; position:relative; box-shadow:0 2px 8px var(--shadow); }
+
+/* ── SVD row ── */
+.svd-row {
+  display:flex; align-items:center; justify-content:center;
+  gap:1rem; flex-wrap:wrap; margin:1.5rem 0;
+}
+.svd-mat-block { text-align:center; }
+.svd-mat-block .mtitle {
+  font-family:'Bebas Neue',sans-serif; font-size:1.7rem; letter-spacing:2px; margin-bottom:0.4rem;
+}
+.svd-mat-block .mdesc {
+  font-family:'JetBrains Mono',monospace; font-size:0.6rem;
+  color:var(--muted); letter-spacing:1px; margin-top:0.4rem;
+}
+.svd-op { font-family:'JetBrains Mono',monospace; font-size:2rem; color:var(--muted); align-self:center; }
+
+/* ── Singular value bars ── */
+.sv-chart { display:flex; align-items:flex-end; gap:5px; height:130px; margin:1rem 0; }
+.sv-col   { display:flex; flex-direction:column; align-items:center; gap:3px; }
+.sv-bar   {
+  width:22px; border-radius:4px 4px 0 0;
+  transition:all 0.4s cubic-bezier(0.34,1.4,0.64,1);
+  cursor:pointer; position:relative;
+}
+.sv-bar:hover::after {
+  content:attr(data-val); position:absolute; top:-24px; left:50%;
+  transform:translateX(-50%);
+  background:var(--card2); border:1px solid var(--orange);
+  padding:2px 6px; border-radius:4px; white-space:nowrap; z-index:10;
+  font-family:'JetBrains Mono',monospace; font-size:0.55rem; color:var(--offwhite);
+}
+.sv-num { font-family:'JetBrains Mono',monospace; font-size:0.5rem; color:var(--dimmed); }
+
+/* ── Slider ── */
+.slider-header { display:flex; align-items:baseline; gap:1rem; margin-bottom:1rem; flex-wrap:wrap; }
+.k-label { font-family:'Bebas Neue',sans-serif; font-size:1.3rem; color:var(--muted); letter-spacing:2px; }
+.k-display {
+  font-family:'Bebas Neue',sans-serif; font-size:4rem; line-height:1;
+  color:var(--orange); min-width:90px;
+  text-shadow:0 0 30px rgba(255,123,47,0.5);
+}
+.k-info { font-family:'JetBrains Mono',monospace; font-size:0.78rem; color:var(--sky); }
+
+input[type=range] {
+  -webkit-appearance:none; appearance:none; width:100%; height:10px;
+  background:linear-gradient(90deg, var(--orange) var(--pct,4%), rgba(255,255,255,0.1) var(--pct,4%));
+  border-radius:5px; outline:none; cursor:pointer; margin:0.6rem 0;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none; width:26px; height:26px; border-radius:50%;
+  background:var(--white); border:3px solid var(--orange);
+  box-shadow:0 0 14px rgba(255,123,47,0.7); cursor:pointer; transition:transform 0.15s;
+}
+input[type=range]::-webkit-slider-thumb:hover { transform:scale(1.25); }
+
+/* ── Compare panels ── */
+.compare-display { display:grid; grid-template-columns:1fr 1fr; gap:2rem; margin:1.5rem 0; }
+.cmp-panel {
+  background:var(--card); border:1.5px solid var(--border2);
+  border-radius:12px; padding:1.5rem; text-align:center;
+  transition:border-color 0.3s;
+}
+.cmp-panel canvas { display:block; margin:0 auto 1rem; border-radius:6px; image-rendering:pixelated; }
+.cmp-panel .cmp-title { font-family:'Bebas Neue',sans-serif; font-size:1.7rem; letter-spacing:2px; }
+.cmp-panel .cmp-stats { font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--muted); margin-top:0.3rem; }
+
+/* ── Comp grid ── */
+.comp-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr));
+  gap:1rem; margin:1.5rem 0;
+}
+.comp-item {
+  background:var(--bg2); border:1.5px solid var(--border2); border-radius:10px;
+  padding:1rem; text-align:center; transition:all 0.25s; cursor:pointer;
+}
+.comp-item:hover { border-color:var(--orange); transform:translateY(-4px); box-shadow:0 8px 24px rgba(255,123,47,0.15); }
+.comp-item canvas { border-radius:4px; display:block; margin:0 auto 0.7rem; image-rendering:pixelated; }
+.comp-item .ci-k { font-family:'Bebas Neue',sans-serif; font-size:1.4rem; letter-spacing:2px; }
+.comp-item .ci-stats { font-family:'JetBrains Mono',monospace; font-size:0.6rem; color:var(--muted); margin-top:0.2rem; }
+.comp-item .ci-quality { font-size:0.82rem; font-weight:700; margin-top:0.3rem; }
+
+/* ── Buttons ── */
+.btn {
+  display:inline-flex; align-items:center; gap:0.5rem;
+  font-family:'Rajdhani',sans-serif; font-weight:700; font-size:1rem;
+  letter-spacing:2px; padding:0.8rem 2rem; border-radius:6px;
+  border:none; cursor:pointer; transition:all 0.22s; text-transform:uppercase;
+}
+.btn-orange {
+  background:var(--orange); color:#000;
+  box-shadow:0 4px 20px rgba(255,123,47,0.4);
+}
+.btn-orange:hover { background:var(--orange2); box-shadow:0 6px 28px rgba(255,123,47,0.6); transform:translateY(-2px); }
+.btn-lime {
+  background:var(--lime); color:#000;
+  box-shadow:0 4px 20px rgba(184,255,71,0.35);
+}
+.btn-lime:hover { background:var(--lime2); transform:translateY(-2px); box-shadow:0 6px 28px rgba(184,255,71,0.5); }
+.btn-ghost {
+  background:transparent; color:var(--offwhite);
+  border:1.5px solid rgba(255,255,255,0.25);
+}
+.btn-ghost:hover { border-color:var(--orange); color:var(--orange); background:rgba(255,123,47,0.06); }
+.btn-outline-lime {
+  background:transparent; color:var(--lime);
+  border:1.5px solid rgba(184,255,71,0.4);
+  padding:0.5rem 1rem; font-size:0.88rem;
+}
+.btn-outline-lime:hover { background:rgba(184,255,71,0.08); border-color:var(--lime); }
+
+/* ── Info box ── */
+.info-box {
+  background:rgba(255,123,47,0.07); border-left:4px solid var(--orange);
+  padding:1rem 1.3rem; border-radius:0 8px 8px 0; margin:1rem 0;
+  font-size:0.95rem; color:var(--offwhite);
+}
+.info-box strong { color:var(--orange); }
+.info-box.sky   { background:rgba(96,200,255,0.07); border-color:var(--sky); }
+.info-box.sky strong { color:var(--sky); }
+.info-box.lime  { background:rgba(184,255,71,0.07); border-color:var(--lime); }
+.info-box.lime strong { color:var(--lime); }
+
+/* ── Fact cards ── */
+.fact-row { display:grid; grid-template-columns:repeat(3,1fr); gap:1.2rem; margin:1.5rem 0; }
+.fact-card {
+  padding:1.5rem; border-radius:10px; border:1.5px solid;
+  background:var(--card); position:relative; overflow:hidden;
+}
+.fact-card::before {
+  content:''; position:absolute; inset:0; opacity:0.06;
+  background:var(--fc-clr); pointer-events:none;
+}
+.fc1 { --fc-clr:var(--sky);    border-color:rgba(96,200,255,0.3); }
+.fc2 { --fc-clr:var(--orange); border-color:rgba(255,123,47,0.3); }
+.fc3 { --fc-clr:var(--lime);   border-color:rgba(184,255,71,0.3); }
+.fact-num {
+  font-family:'Bebas Neue',sans-serif; font-size:3.2rem; line-height:1; margin-bottom:0.4rem;
+}
+.fc1 .fact-num { color:var(--sky);    text-shadow:0 0 20px rgba(96,200,255,0.4); }
+.fc2 .fact-num { color:var(--orange); text-shadow:0 0 20px rgba(255,123,47,0.4); }
+.fc3 .fact-num { color:var(--lime);   text-shadow:0 0 20px rgba(184,255,71,0.4); }
+.fact-card p { font-size:0.9rem; color:var(--muted); line-height:1.6; position:relative; }
+.fact-card strong { color:var(--offwhite); }
+
+/* ── Analogy cards ── */
+.analogy-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1.2rem; margin:1.5rem 0; }
+.analogy-card {
+  background:var(--card); border:1.5px solid var(--border2);
+  border-radius:10px; padding:1.4rem; transition:all 0.25s;
+}
+.analogy-card:hover { border-color:var(--orange); transform:translateY(-3px); }
+.analogy-card .aic { font-size:2rem; margin-bottom:0.5rem; }
+.analogy-card h3 { font-size:1rem; font-weight:700; color:var(--orange2); margin-bottom:0.4rem; }
+.analogy-card p  { font-size:0.86rem; color:var(--muted); line-height:1.6; }
+
+/* ── Real world cards ── */
+.rw-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1.2rem; margin:1.5rem 0; }
+.rw-card {
+  background:var(--card); border:1.5px solid var(--border2);
+  border-radius:10px; padding:1.3rem; text-align:center;
+  transition:all 0.25s;
+}
+.rw-card:hover { border-color:var(--lime); transform:translateY(-4px); box-shadow:0 8px 28px rgba(184,255,71,0.12); }
+.rw-icon  { font-size:2rem; margin-bottom:0.4rem; }
+.rw-title { font-weight:700; font-size:0.95rem; color:var(--offwhite); margin-bottom:0.3rem; }
+.rw-desc  { font-size:0.8rem; color:var(--muted); line-height:1.5; }
+
+/* ── Nav row ── */
+.nav-row { display:flex; justify-content:space-between; margin-top:2.5rem; gap:1rem; flex-wrap:wrap; }
+
+/* ── Pulse ring ── */
+.pulse-ring { animation:pulseRing 2.5s ease-in-out infinite; }
+@keyframes pulseRing {
+  0%,100%{ box-shadow:0 0 0 0 rgba(255,123,47,0.4); }
+  50%    { box-shadow:0 0 0 14px rgba(255,123,47,0); }
+}
+
+/* ── Final screen ── */
+.final-screen { text-align:center; padding:3rem 1rem; }
+.final-screen h2 {
+  font-family:'Bebas Neue',sans-serif; font-size:clamp(2.5rem,6vw,4.5rem);
+  letter-spacing:4px; color:var(--white);
+  text-shadow:0 0 40px rgba(255,123,47,0.4);
+  margin-bottom:0.5rem;
+}
+.final-formula {
+  font-family:'JetBrains Mono',monospace; font-size:1.6rem;
+  color:var(--orange); letter-spacing:4px; margin:1.5rem 0;
+  text-shadow:0 0 20px rgba(255,123,47,0.5);
+}
+
+/* ── Divider ── */
+.divider { height:1px; background:linear-gradient(90deg,transparent,var(--orange),transparent); margin:2rem 0; opacity:0.3; }
+
+/* ── Responsive ── */
+@media(max-width:768px){
+  main,header{padding-left:1.5rem;padding-right:1.5rem;}
+  .two-col,.three-col,.fact-row,.rw-grid,.analogy-grid{grid-template-columns:1fr;}
+  .compare-display{grid-template-columns:1fr;}
+  h1.hero-title{font-size:3rem;}
+  .step-btn .stxt{font-size:0.75rem;}
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════════ HEADER ════════════════ -->
+<header>
+  <div class="header-top">
+    <div class="header-badges">
+      <span class="badge b-orange">LIVE DEMO</span>
+      <span class="badge b-lime">INTERACTIVE</span>
+    </div>
+  </div>
+
+  <h1 class="hero-title">IMAGE<br><span class="hi">COMPRESSION</span><br>VIA SVD</h1>
+  <p class="hero-sub">Singular Value Decomposition &nbsp;·&nbsp; Where Linear Algebra Meets Reality</p>
+
+  <div class="formula-hero">
+    <span class="f-A">A</span>
+    <span class="f-op">=</span>
+    <span class="f-U">U</span>
+    <span class="f-op">×</span>
+    <span class="f-S">Σ</span>
+    <span class="f-op">×</span>
+    <span class="f-V">V<sup style="font-size:0.75em">T</sup></span>
+    <span class="f-note" style="margin-left:1rem">// decompose → keep K → reconstruct</span>
+  </div>
+</header>
+
+<!-- ════════════════ MAIN ════════════════ -->
+<main>
+
+  <div class="progress-bar" style="margin-top:2rem">
+    <div class="progress-fill" id="progressFill" style="width:16.6%"></div>
+  </div>
+
+  <!-- Step nav -->
+  <div class="step-nav" id="stepNav">
+    <button class="step-btn active" onclick="goStep(0)"><span class="snum">01</span><span class="stxt">Mystery</span></button>
+    <button class="step-btn" onclick="goStep(1)"><span class="snum">02</span><span class="stxt">Matrix</span></button>
+    <button class="step-btn" onclick="goStep(2)"><span class="snum">03</span><span class="stxt">SVD Split</span></button>
+    <button class="step-btn" onclick="goStep(3)"><span class="snum">04</span><span class="stxt">Importance</span></button>
+    <button class="step-btn" onclick="goStep(4)"><span class="snum">05</span><span class="stxt">Choose K</span></button>
+    <button class="step-btn" onclick="goStep(5)"><span class="snum">06</span><span class="stxt">Real World</span></button>
+  </div>
+
+  <!-- ────────── STAGE 0: Mystery image ────────── -->
+  <div class="stage active" id="stage-0">
+    <div class="sec-label">STEP 01 — THE MYSTERY</div>
+    <div class="sec-title">CAN YOU GUESS WHAT THIS IS?</div>
+
+    <div class="info-box">
+      <strong>Challenge for you:</strong> A picture appears below. Can you guess what this image looks like <strong>inside the computer?</strong> Press the button to find out!
+    </div>
+
+    <div class="two-col" style="margin-top:1.5rem">
+      <div class="canvas-wrap pulse-ring">
+        <canvas id="c-original" width="220" height="220"></canvas>
+        <div class="canvas-label">👁️ THE IMAGE — What you see on screen</div>
+      </div>
+      <div class="card c-orange">
+        <h2 style="color:var(--orange)">What Is Inside?</h2>
+        <p style="margin:1rem 0">The computer stores this beautiful image as just <strong>numbers</strong>? 🤯</p>
+        <p style="margin-bottom:1rem">Every single pixel is one number from <strong>0</strong> (black) to <strong>255</strong> (white). Nothing else — pure math!</p>
+        <div class="divider"></div>
+        <p style="margin:1rem 0; font-size:1rem">
+          This image = <strong style="color:var(--sky); font-size:1.2rem">128 × 128 = 16,384 numbers</strong>
+        </p>
+        <p style="margin-bottom:1rem; font-size:0.95rem; color:var(--muted)">
+          Full HD photo = <strong style="color:var(--orange)">1920 × 1080 = 20,73,600 numbers!</strong>
+        </p>
+        <p style="font-size:0.95rem; color:var(--muted)">
+          Can we store the same image with <strong style="color:var(--lime)">far fewer numbers?</strong><br>
+          That's exactly what SVD does!
+        </p>
+      </div>
+    </div>
+
+    <div class="analogy-grid" style="margin-top:1.5rem">
+      <div class="analogy-card"><div class="aic">🎵</div><h3>Like MP3 Audio</h3><p>MP3 removes sounds humans can't hear — smaller file, same experience. SVD does this for images!</p></div>
+      <div class="analogy-card"><div class="aic">📰</div><h3>Like a News Summary</h3><p>500-word article → 50-word summary. Same idea, less data. SVD finds the "summary" of an image.</p></div>
+      <div class="analogy-card"><div class="aic">🍛</div><h3>Like Key Ingredients</h3><p>A recipe has 20 ingredients. Top 5 give 90% of the taste. SVD finds the VVIP ingredients of your image matrix!</p></div>
+    </div>
+
+    <div class="nav-row">
+      <div></div>
+      <button class="btn btn-orange" onclick="goStep(1)">REVEAL THE MATRIX →</button>
+    </div>
+  </div>
+
+  <!-- ────────── STAGE 1: Matrix reveal ────────── -->
+  <div class="stage" id="stage-1">
+    <div class="sec-label">STEP 02 — THE BIG REVEAL</div>
+    <div class="sec-title">IT'S JUST A MATRIX OF NUMBERS!</div>
+
+    <div class="two-col">
+      <div class="canvas-wrap">
+        <canvas id="c-matrix-img" width="220" height="220"></canvas>
+        <div class="canvas-label">The image — 128×128 pixels</div>
+      </div>
+      <div style="text-align:center">
+        <p style="color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:0.7rem; margin-bottom:0.8rem; letter-spacing:1px">
+          SAME IMAGE AS NUMBERS — top-left 10×10 corner shown
+        </p>
+        <div class="mat-grid" id="matGrid" style="grid-template-columns:repeat(10,1fr)"></div>
+        <p style="color:var(--dimmed); font-size:0.8rem; margin-top:0.8rem">✋ Hover any cell to zoom!</p>
+      </div>
+    </div>
+
+    <div class="info-box lime" style="margin-top:1.5rem">
+      <strong>Key Insight:</strong> A 128×128 image = a matrix with <strong>16,384 numbers</strong> in memory.<br>
+      SVD asks: <em>"Do we really need ALL of them?"</em> → <strong>Answer: NO! We can throw most away.</strong>
+    </div>
+
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="goStep(0)">← BACK</button>
+      <button class="btn btn-orange" onclick="goStep(2)">LEARN SVD →</button>
+    </div>
+  </div>
+
+  <!-- ────────── STAGE 2: SVD breakdown ────────── -->
+  <div class="stage" id="stage-2">
+    <div class="sec-label">STEP 03 — THE SVD FORMULA</div>
+    <div class="sec-title">SPLIT THE MATRIX INTO 3 PARTS</div>
+
+    <div class="svd-row">
+      <div class="svd-mat-block">
+        <div class="mtitle" style="color:#c084fc">A</div>
+        <canvas id="c-svd-A" width="140" height="140" style="border-radius:6px;border:1.5px solid rgba(192,132,252,0.3)"></canvas>
+        <div class="mdesc">IMAGE MATRIX<br>128 × 128</div>
+      </div>
+      <div class="svd-op">=</div>
+      <div class="svd-mat-block">
+        <div class="mtitle" style="color:var(--sky)">U</div>
+        <canvas id="c-svd-U" width="140" height="140" style="border-radius:6px;border:1.5px solid rgba(96,200,255,0.3)"></canvas>
+        <div class="mdesc">LEFT MATRIX<br>Horizontal patterns</div>
+      </div>
+      <div class="svd-op">×</div>
+      <div class="svd-mat-block">
+        <div class="mtitle" style="color:var(--orange)">Σ</div>
+        <canvas id="c-svd-S" width="140" height="140" style="border-radius:6px;border:1.5px solid rgba(255,123,47,0.3)"></canvas>
+        <div class="mdesc">SIGMA — DIAGONAL<br>⭐ Importance scores</div>
+      </div>
+      <div class="svd-op">×</div>
+      <div class="svd-mat-block">
+        <div class="mtitle" style="color:var(--lime)">V<sup style="font-size:0.7em">T</sup></div>
+        <canvas id="c-svd-V" width="140" height="140" style="border-radius:6px;border:1.5px solid rgba(184,255,71,0.3)"></canvas>
+        <div class="mdesc">RIGHT MATRIX<br>Vertical patterns</div>
+      </div>
+    </div>
+
+    <div class="three-col">
+      <div class="card c-sky">
+        <h2 style="color:var(--sky)">U — Left Patterns</h2>
+        <p>Captures <strong>horizontal structure</strong> of the image. Column vectors are orthonormal — the "horizontal building blocks".</p>
+      </div>
+      <div class="card c-orange">
+        <h2 style="color:var(--orange)">Σ — The KEY Matrix ⭐</h2>
+        <p>A diagonal matrix. Each σ₁ ≥ σ₂ ≥ … ≥ 0 tells us <strong>how important</strong> each pattern is. We use K to decide how many to keep!</p>
+      </div>
+      <div class="card c-lime">
+        <h2 style="color:var(--lime)">Vᵀ — Right Patterns</h2>
+        <p>Captures <strong>vertical structure</strong>. Row vectors are also orthonormal — the "vertical building blocks" of the image.</p>
+      </div>
+    </div>
+
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="goStep(1)">← BACK</button>
+      <button class="btn btn-orange" onclick="goStep(3)">SEE SINGULAR VALUES →</button>
+    </div>
+  </div>
+
+  <!-- ────────── STAGE 3: Singular values ────────── -->
+  <div class="stage" id="stage-3">
+    <div class="sec-label">STEP 04 — THE IMPORTANCE SCORE</div>
+    <div class="sec-title">NOT ALL SINGULAR VALUES ARE EQUAL</div>
+
+    <div class="info-box sky">
+      <strong>The key insight:</strong> Singular values σ₁ > σ₂ > σ₃ > … drop off very fast. The <strong>first few carry 90% of the image info</strong>. The rest is mostly noise — we can throw it away!
+    </div>
+
+    <div class="card" style="margin-top:1.5rem">
+      <p style="font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--muted); margin-bottom:1rem; letter-spacing:1px">
+        SINGULAR VALUES σ₁ → σ₃₀ &nbsp;·&nbsp; Hover a bar for exact value
+      </p>
+      <div class="sv-chart" id="svChart"></div>
+      <div style="display:flex; gap:1.5rem; margin-top:0.8rem; flex-wrap:wrap">
+        <span style="font-size:0.8rem; color:var(--muted); display:flex; align-items:center; gap:6px">
+          <span style="width:14px;height:14px;border-radius:3px;background:var(--orange);display:inline-block"></span> Kept with current K
+        </span>
+        <span style="font-size:0.8rem; color:var(--muted); display:flex; align-items:center; gap:6px">
+          <span style="width:14px;height:14px;border-radius:3px;background:rgba(255,255,255,0.1);display:inline-block"></span> Discarded
+        </span>
+      </div>
+    </div>
+
+    <div class="fact-row">
+      <div class="fact-card fc1"><div class="fact-num">~90%</div><p>of image quality stored in just the <strong>top 10–15%</strong> of singular values</p></div>
+      <div class="fact-card fc2"><div class="fact-num">3.2×</div><p>Less storage with <strong>K = 20</strong>: 5,140 numbers instead of 16,384 — and the image is already clearly recognisable</p></div>
+      <div class="fact-card fc3"><div class="fact-num">∞</div><p>Applications — from <strong>recommendations</strong> to <strong>face recognition</strong> and <strong>satellite imaging</strong></p></div>
+    </div>
+
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="goStep(2)">← BACK</button>
+      <button class="btn btn-lime" onclick="goStep(4)">TRY IT YOURSELF →</button>
+    </div>
+  </div>
+
+  <!-- ────────── STAGE 4: Interactive K ────────── -->
+  <div class="stage" id="stage-4">
+    <div class="sec-label">STEP 05 — YOUR TURN</div>
+    <div class="sec-title">CHOOSE K — SEE THE RESULT LIVE</div>
+
+    <div class="info-box">
+      <strong>K</strong> = number of singular values to keep. &nbsp;
+      <strong style="color:var(--rose)">Small K</strong> → blurry, tiny file &nbsp;|&nbsp;
+      <strong style="color:var(--lime)">Large K</strong> → sharp, bigger file &nbsp;|&nbsp;
+      <strong>K = 128</strong> → identical to original<br>
+      Storing rank K needs K × (128 + 128 + 1) numbers, so SVD <strong>saves space only while K &lt; 64</strong>.
+    </div>
+
+    <!-- Slider -->
+    <div class="card" style="margin:1.5rem 0">
+      <div class="slider-header">
+        <span class="k-label">K =</span>
+        <span class="k-display" id="kDisplay">5</span>
+        <div>
+          <div class="k-info" id="kRatio">— compression ratio</div>
+          <div class="k-info" id="kSaving" style="color:var(--lime)">— % data saved</div>
+        </div>
+      </div>
+      <input type="range" id="kSlider" min="1" max="128" value="5"
+             oninput="onKChange(this.value)" style="--pct:3.1%">
+      <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:0.62rem;color:var(--dimmed);margin-top:0.3rem">
+        <span>K=1 · max blur</span><span>K=32</span><span>K=64</span><span>K=96</span><span>K=128 · original</span>
+      </div>
+    </div>
+
+    <!-- Live compare -->
+    <div class="compare-display">
+      <div class="cmp-panel" style="border-color:rgba(96,200,255,0.3)">
+        <canvas id="c-orig-cmp" width="240" height="240"></canvas>
+        <div class="cmp-title" style="color:var(--sky)">ORIGINAL</div>
+        <div class="cmp-stats">128 × 128 = 16,384 numbers</div>
+      </div>
+      <div class="cmp-panel" id="compPanel">
+        <canvas id="c-compressed" width="240" height="240"></canvas>
+        <div class="cmp-title" id="cmpTitle" style="color:var(--orange)">K = 5</div>
+        <div class="cmp-stats" id="cmpStats">— numbers stored</div>
+        <div style="font-size:1.05rem;font-weight:700;margin-top:0.5rem;color:var(--rose)" id="cmpQuality">Very blurry 😂</div>
+      </div>
+    </div>
+
+    <!-- Preset buttons -->
+    <p style="color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:0.75rem;margin-bottom:0.8rem">⚡ Quick presets — click and see instantly:</p>
+    <div style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-bottom:2rem">
+      <button class="btn btn-outline-lime" onclick="setK(2)">K = 2</button>
+      <button class="btn btn-outline-lime" onclick="setK(5)">K = 5</button>
+      <button class="btn btn-outline-lime" onclick="setK(10)">K = 10</button>
+      <button class="btn btn-outline-lime" onclick="setK(20)">K = 20</button>
+      <button class="btn btn-outline-lime" onclick="setK(40)">K = 40</button>
+      <button class="btn btn-outline-lime" onclick="setK(80)">K = 80</button>
+      <button class="btn btn-outline-lime" onclick="setK(128)">K = 128</button>
+    </div>
+
+    <!-- All K comparison -->
+    <p style="color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:0.75rem;margin-bottom:0.8rem">📊 All compression levels at a glance:</p>
+    <div class="comp-grid" id="compGrid"></div>
+
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="goStep(3)">← BACK</button>
+      <button class="btn btn-lime" onclick="goStep(5)">SEE REAL WORLD USES →</button>
+    </div>
+  </div>
+
+  <!-- ────────── STAGE 5: Real World ────────── -->
+  <div class="stage" id="stage-5">
+    <div class="sec-label">STEP 06 — THE BIGGER PICTURE</div>
+    <div class="sec-title">SVD POWERS THE REAL WORLD</div>
+
+    <div class="rw-grid">
+      <div class="rw-card"><div class="rw-icon">📱</div><div class="rw-title">Photo Compression</div><div class="rw-desc">JPEG photos on your phone use a cousin of SVD (the DCT): keep the strong components, drop the weak ones.</div></div>
+      <div class="rw-card"><div class="rw-icon">🎬</div><div class="rw-title">Video Streaming</div><div class="rw-desc">Video codecs apply the same "keep the top components" idea to every frame, so streaming works on slow internet.</div></div>
+      <div class="rw-card"><div class="rw-icon">😊</div><div class="rw-title">Face Recognition</div><div class="rw-desc">SVD finds "eigenfaces" — a few key patterns from which faces can be described and compared.</div></div>
+      <div class="rw-card"><div class="rw-icon">🏥</div><div class="rw-title">Medical Imaging</div><div class="rw-desc">Low-rank (SVD) methods help remove noise and speed up MRI reconstruction from fewer measurements.</div></div>
+      <div class="rw-card"><div class="rw-icon">🔍</div><div class="rw-title">Recommendations &amp; Search</div><div class="rw-desc">Matrix factorisation (famous from the Netflix Prize) and Latent Semantic Analysis use SVD to find hidden patterns in what people watch and search.</div></div>
+      <div class="rw-card"><div class="rw-icon">🛰️</div><div class="rw-title">Satellite Imaging</div><div class="rw-desc">Hyperspectral satellite images have hundreds of colour bands. SVD/PCA reduces them to a few key components.</div></div>
+    </div>
+
+    <div class="final-screen">
+      <h2>YOU JUST USED LINEAR ALGEBRA</h2>
+      <p style="color:var(--muted); max-width:580px; margin:0 auto 1rem; font-size:1.05rem; line-height:1.7">
+        The matrix decomposition you study in <strong style="color:var(--offwhite)">Applied Mathematics</strong> is the idea behind photo and video compression, recommendations, face recognition and satellite imaging.
+      </p>
+      <div class="final-formula">A = U × Σ × Vᵀ</div>
+      <p style="color:var(--dimmed); font-family:'JetBrains Mono',monospace; font-size:0.8rem">That single equation powered this entire demo.</p>
+      <div style="margin-top:2.5rem">
+        <button class="btn btn-orange" onclick="goStep(0)" style="font-size:1.1rem; padding:1rem 2.5rem">↺ RESTART DEMO</button>
+      </div>
+    </div>
+
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="goStep(4)">← BACK</button>
+    </div>
+  </div>
+
+</main>
+
+<!-- ════════════════ JAVASCRIPT — SVD ENGINE ════════════════ -->
+<script>
+const IMG_SIZE = 128;
+let imageData = null;
+let svdResult  = null;
+
+/* ── Generate smiley image ── */
+function generateImage() {
+  const s = IMG_SIZE, img = new Float64Array(s*s);
+  const cx = s/2, cy = s/2;
+  for(let i=0;i<s;i++) for(let j=0;j<s;j++) img[i*s+j]=30+20*Math.sin(i/15)*Math.cos(j/15);
+  for(let i=0;i<s;i++) for(let j=0;j<s;j++) if((i-cy)**2+(j-cx)**2<(s/3)**2) img[i*s+j]=195+10*Math.sin((i+j)/8);
+  for(let i=0;i<s;i++) for(let j=0;j<s;j++) if((i-(cy-18))**2+(j-(cx-18))**2<100) img[i*s+j]=35;
+  for(let i=0;i<s;i++) for(let j=0;j<s;j++) if((i-(cy-18))**2+(j-(cx+18))**2<100) img[i*s+j]=35;
+  for(let di=-3;di<=3;di++) for(let dj=-3;dj<=3;dj++) if(di*di+dj*dj<12) img[(Math.round(cy)+di)*s+Math.round(cx)+dj]=80;
+  for(let a=0.1*Math.PI;a<=0.9*Math.PI;a+=0.02){
+    const r=s/5,ei=Math.round(cy+12+r*Math.sin(a)),ej=Math.round(cx+r*Math.cos(a));
+    for(let di=-3;di<=3;di++) for(let dj=-3;dj<=3;dj++){const ni=ei+di,nj=ej+dj;if(ni>=0&&ni<s&&nj>=0&&nj<s) img[ni*s+nj]=35;}
+  }
+  for(let i=0;i<img.length;i++) img[i]=Math.max(0,Math.min(255,img[i]));
+  return img;
+}
+
+/* ── Exact SVD by one-sided Jacobi (Hestenes) rotations ── */
+function computeSVD(imgArr, n) {
+  // W holds the columns of A; V accumulates the right rotations (row-major n×n)
+  const W=new Float64Array(imgArr), V=new Float64Array(n*n);
+  for(let i=0;i<n;i++) V[i*n+i]=1;
+  for(let sweep=0;sweep<40;sweep++){
+    let off=0;
+    for(let p=0;p<n-1;p++) for(let q=p+1;q<n;q++){
+      let a=0,b=0,c=0;
+      for(let i=0;i<n;i++){const x=W[i*n+p],y=W[i*n+q];a+=x*x;b+=y*y;c+=x*y;}
+      if(Math.abs(c)<=1e-12*Math.sqrt(a*b)) continue;
+      off=Math.max(off,Math.abs(c)/Math.sqrt(a*b));
+      const z=(b-a)/(2*c), t=Math.sign(z||1)/(Math.abs(z)+Math.sqrt(1+z*z));
+      const cs=1/Math.sqrt(1+t*t), sn=cs*t;
+      for(let i=0;i<n;i++){
+        const x=W[i*n+p],y=W[i*n+q]; W[i*n+p]=cs*x-sn*y; W[i*n+q]=sn*x+cs*y;
+        const v1=V[i*n+p],v2=V[i*n+q]; V[i*n+p]=cs*v1-sn*v2; V[i*n+q]=sn*v1+cs*v2;
+      }
+    }
+    if(off<1e-10) break;
+  }
+  // singular values = column norms; sort descending
+  const norms=[]; for(let j=0;j<n;j++){let s2=0;for(let i=0;i<n;i++) s2+=W[i*n+j]**2; norms.push([Math.sqrt(s2),j]);}
+  norms.sort((x,y)=>y[0]-x[0]);
+  const K=n, S=new Float64Array(K), U=new Float64Array(n*K), Vt=new Float64Array(n*K);
+  norms.forEach(([sv,j],k)=>{
+    S[k]=sv;
+    for(let i=0;i<n;i++){ U[k*n+i]= sv>1e-10 ? W[i*n+j]/sv : 0; Vt[k*n+i]=V[i*n+j]; }
+  });
+  return {U,S,Vt,n,K};
+}
+
+function reconstruct(svd,k){
+  const{U,S,Vt,n}=svd, res=new Float64Array(n*n);
+  for(let c=0;c<k;c++){const sig=S[c];if(sig<1e-10) continue;for(let i=0;i<n;i++){const ui=U[c*n+i];for(let j=0;j<n;j++) res[i*n+j]+=sig*ui*Vt[c*n+j];}}
+  for(let i=0;i<res.length;i++) res[i]=Math.max(0,Math.min(255,res[i]));
+  return res;
+}
+
+/* ── Canvas rendering ── */
+function drawGray(canvas,arr,size){
+  const ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+  const id=ctx.createImageData(W,H),sx=size/W,sy=size/H;
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const v=Math.round(arr[Math.floor(y*sy)*size+Math.floor(x*sx)]);
+    const i4=(y*W+x)*4; id.data[i4]=v;id.data[i4+1]=v;id.data[i4+2]=v;id.data[i4+3]=255;
+  }
+  ctx.putImageData(id,0,0);
+}
+
+function drawColormap(canvas,arr,rows,cols,cmap){
+  const ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+  const id=ctx.createImageData(W,H);
+  let mn=Infinity,mx=-Infinity; for(let i=0;i<arr.length;i++){if(arr[i]<mn)mn=arr[i];if(arr[i]>mx)mx=arr[i];}
+  const rng=mx-mn||1,sx=cols/W,sy=rows/H;
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const t=(arr[Math.floor(y*sy)*cols+Math.floor(x*sx)]-mn)/rng;
+    const i4=(y*W+x)*4;
+    if(cmap==='rdbu'){
+      if(t<0.5){const u=t*2;id.data[i4]=Math.round(10+50*u);id.data[i4+1]=Math.round(80+100*u);id.data[i4+2]=Math.round(180+50*u);}
+      else{const u=t*2-1;id.data[i4]=Math.round(200+55*u);id.data[i4+1]=Math.round(80-70*u);id.data[i4+2]=Math.round(60-40*u);}
+    } else if(cmap==='hot'){
+      id.data[i4]=Math.round(t<0.5?t*2*255:255);
+      id.data[i4+1]=Math.round(t<0.5?0:(t-0.5)*2*255);
+      id.data[i4+2]=0;
+    } else {const v=Math.round(t*255);id.data[i4]=v;id.data[i4+1]=v;id.data[i4+2]=v;}
+    id.data[i4+3]=255;
+  }
+  ctx.putImageData(id,0,0);
+}
+
+/* ── Singular value bars ── */
+let currentK=5;
+function buildSVBars(k){
+  const chart=document.getElementById('svChart'); if(!chart||!svdResult) return;
+  chart.innerHTML=''; const top=30,maxV=svdResult.S[0]||1;
+  for(let i=0;i<top;i++){
+    const pct=svdResult.S[i]/maxV;
+    const col=document.createElement('div'); col.className='sv-col';
+    const bar=document.createElement('div'); bar.className='sv-bar';
+    bar.style.height=Math.round(pct*120)+'px';
+    // Orange gradient for kept, dim for discarded
+    bar.style.background=i<k?`hsl(${28-i*0.5},100%,${60-i*0.5}%)`:'rgba(255,255,255,0.08)';
+    bar.setAttribute('data-val','σ'+(i+1)+'='+svdResult.S[i].toFixed(1));
+    const lbl=document.createElement('div'); lbl.className='sv-num'; lbl.textContent='σ'+(i+1);
+    col.appendChild(bar); col.appendChild(lbl); chart.appendChild(col);
+  }
+}
+
+/* ── Matrix grid ── */
+function buildMatGrid(){
+  const grid=document.getElementById('matGrid'); if(!grid||!imageData) return;
+  grid.innerHTML='';
+  for(let i=0;i<10;i++) for(let j=0;j<10;j++){
+    const v=Math.round(imageData[i*IMG_SIZE+j]);
+    const cell=document.createElement('div'); cell.className='mat-cell';
+    cell.style.background=`rgb(${v},${v},${v})`;
+    cell.style.color=v>120?'#000':'#fff';
+    cell.textContent=v; grid.appendChild(cell);
+  }
+}
+
+/* ── Comparison grid ── */
+const presetKs=[2,5,10,20,40,80,128];
+function buildCompGrid(){
+  const grid=document.getElementById('compGrid'); if(!grid||!svdResult) return;
+  grid.innerHTML='';
+  presetKs.forEach(k=>{
+    const arr=reconstruct(svdResult,k);
+    const item=document.createElement('div'); item.className='comp-item';
+    const c=document.createElement('canvas'); c.width=120; c.height=120;
+    drawGray(c,arr,IMG_SIZE);
+    const size=IMG_SIZE*k+k+k*IMG_SIZE;
+    const kEl=document.createElement('div'); kEl.className='ci-k';
+    kEl.textContent='K = '+k;
+    kEl.style.color=k<=5?'var(--rose)':k<=20?'var(--orange)':k<=60?'var(--sky)':'var(--lime)';
+    const st=document.createElement('div'); st.className='ci-stats';
+    st.textContent=storageText(size).short;
+    const q=document.createElement('div'); q.className='ci-quality';
+    q.textContent=k<=3?'Blurry 😂':k<=10?'Hazy 😬':k<=25?'OK 🤔':k<=60?'Good 😮':'Perfect 🎉';
+    q.style.color=k<=3?'var(--rose)':k<=10?'var(--orange)':k<=60?'var(--sky)':'var(--lime)';
+    item.appendChild(c);item.appendChild(kEl);item.appendChild(st);item.appendChild(q);
+    item.onclick=()=>{setK(k);goStep(4);};
+    grid.appendChild(item);
+  });
+}
+
+/* ── Storage wording: honest when rank-K storage exceeds the original ── */
+function storageText(size){
+  const orig=IMG_SIZE*IMG_SIZE;
+  if(size<orig){
+    const r=(orig/size).toFixed(1), p=Math.round((1-size/orig)*100);
+    return {saves:true, ratio:r+'× smaller than original', saving:p+'% data saved', short:r+'× smaller · '+p+'% saved'};
+  }
+  const x=size/orig, r=x<1.1?x.toFixed(2):x.toFixed(1), q=(x-1)*100, p=q<1?q.toFixed(1):Math.round(q);
+  return {saves:false, ratio:r+'× larger than original', saving:'No saving — '+p+'% more numbers than the original', short:r+'× larger · no saving'};
+}
+
+/* ── K slider ── */
+function onKChange(val){
+  currentK=parseInt(val);
+  document.getElementById('kDisplay').textContent=currentK;
+  document.getElementById('kSlider').style.setProperty('--pct',((currentK-1)/127*100).toFixed(1)+'%');
+  const size=IMG_SIZE*currentK+currentK+currentK*IMG_SIZE;
+  const st=storageText(size);
+  document.getElementById('kRatio').textContent=st.ratio;
+  document.getElementById('kSaving').textContent=st.saving;
+  document.getElementById('kSaving').style.color=st.saves?'var(--lime)':'var(--rose)';
+  document.getElementById('cmpTitle').textContent='K = '+currentK;
+  document.getElementById('cmpStats').textContent=size.toLocaleString()+' numbers stored';
+  const q=currentK<=3?'Very blurry 😂':currentK<=8?'Quite blurry 😬':currentK<=20?'Getting better 🤔':currentK<=50?'Looks great! 😮':currentK<=100?'Near perfect! 😍':'Identical to original! 🎉';
+  const qEl=document.getElementById('cmpQuality');
+  qEl.textContent=q;
+  qEl.style.color=currentK<=8?'var(--rose)':currentK<=30?'var(--orange)':currentK<=80?'var(--sky)':'var(--lime)';
+  document.getElementById('cmpTitle').style.color=currentK<=8?'var(--rose)':currentK<=30?'var(--orange)':currentK<=80?'var(--sky)':'var(--lime)';
+  if(svdResult){
+    drawGray(document.getElementById('c-compressed'),reconstruct(svdResult,currentK),IMG_SIZE);
+    buildSVBars(currentK);
+  }
+}
+function setK(k){ document.getElementById('kSlider').value=k; onKChange(k); }
+
+/* ── SVD panel drawing ── */
+function drawSVDPanels(){
+  if(!svdResult) return;
+  const{U,S,Vt,n}=svdResult;
+  drawGray(document.getElementById('c-svd-A'),imageData,IMG_SIZE);
+  drawColormap(document.getElementById('c-svd-U'),U,n,n,'rdbu');
+  const sigArr=new Float64Array(n*n), maxS=S[0];
+  // square-root scale so the smaller singular values stay visible on the diagonal
+  for(let i=0;i<Math.min(n,S.length);i++){ const v=Math.sqrt(S[i]/maxS); sigArr[i*n+i]=v; if(i+1<n) sigArr[i*n+i+1]=v; }
+  drawColormap(document.getElementById('c-svd-S'),sigArr,n,n,'hot');
+  drawColormap(document.getElementById('c-svd-V'),Vt,n,n,'rdbu');
+}
+
+/* ── Step navigation ── */
+let currentStep=0;
+const totalSteps=6;
+function goStep(n){
+  document.getElementById('stage-'+currentStep).classList.remove('active');
+  document.querySelectorAll('.step-btn')[currentStep].classList.remove('active');
+  if(n>currentStep) document.querySelectorAll('.step-btn')[currentStep].classList.add('done');
+  currentStep=n;
+  document.getElementById('stage-'+n).classList.add('active');
+  document.querySelectorAll('.step-btn')[n].classList.add('active');
+  document.getElementById('progressFill').style.width=((n+1)/totalSteps*100)+'%';
+  if(n===1) buildMatGrid();
+  if(n===2) drawSVDPanels();
+  if(n===3) buildSVBars(currentK);
+  if(n===4){ onKChange(currentK); drawGray(document.getElementById('c-orig-cmp'),imageData,IMG_SIZE); buildCompGrid(); }
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ── Init ── */
+window.onload=function(){
+  imageData=generateImage();
+  ['c-original','c-matrix-img'].forEach(id=>{const c=document.getElementById(id);if(c) drawGray(c,imageData,IMG_SIZE);});
+  setTimeout(()=>{
+    svdResult=computeSVD(imageData,IMG_SIZE);
+    const c=document.getElementById('c-orig-cmp'); if(c) drawGray(c,imageData,IMG_SIZE);
+    drawGray(document.getElementById('c-compressed'),reconstruct(svdResult,5),IMG_SIZE);
+  },200);
+};
+</script>
+</body>
+</html>
